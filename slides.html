@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servers Get Stressed Too - PyCon NG 2025</title>
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/theme/black.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/plugin/highlight/monokai.css">
+    
+    <style>
+        .reveal {
+            font-size: 36px;
+        }
+        .reveal h1 {
+            font-size: 2.5em;
+            text-transform: none;
+        }
+        .reveal h2 {
+            font-size: 1.8em;
+            text-transform: none;
+            color: #42affa;
+        }
+        .reveal h3 {
+            font-size: 1.3em;
+            color: #a8a8a8;
+            font-weight: 300;
+        }
+        .reveal ul {
+            display: block;
+        }
+        .reveal li {
+            margin: 20px 0;
+        }
+        .reveal blockquote {
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 5px solid #42affa;
+            padding: 20px;
+            font-style: italic;
+            font-size: 0.9em;
+        }
+        .reveal pre {
+            width: 100%;
+            font-size: 0.55em;
+        }
+        .reveal code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        .reveal pre code {
+            background: transparent;
+            padding: 20px;
+        }
+        .reveal strong {
+            color: #42affa;
+        }
+        .emoji {
+            font-style: normal;
+        }
+        .social-links {
+            font-size: 0.8em;
+            margin-top: 30px;
+        }
+        .checklist li {
+            text-align: left;
+            font-size: 0.85em;
+        }
+        
+        /* Make slides scrollable when content overflows */
+        .reveal .slides {
+            text-align: left;
+        }
+        .reveal .slides section {
+            height: 100%;
+            overflow-y: auto !important;
+            overflow-x: hidden;
+            padding: 20px 40px;
+            box-sizing: border-box;
+        }
+        .reveal .slides section::-webkit-scrollbar {
+            width: 8px;
+        }
+        .reveal .slides section::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+        .reveal .slides section::-webkit-scrollbar-thumb {
+            background: rgba(66, 175, 250, 0.5);
+            border-radius: 4px;
+        }
+        .reveal .slides section::-webkit-scrollbar-thumb:hover {
+            background: rgba(66, 175, 250, 0.7);
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            
+            <!-- Title Slide -->
+            <section>
+                <h1>Servers Get Stressed Too</h1>
+                <h3>Subtle Ways We Overload Our Systems Without Realizing It</h3>
+                <p style="margin-top: 50px;">
+                    <strong>Abdulmateen Tairu</strong> (@taycode)<br>
+                    PyCon NG 2025
+                </p>
+            </section>
+
+            <!-- Why This Talk -->
+            <section>
+                <h2>Why This Talk?</h2>
+                <ul>
+                    <li>I've spent years building and scaling backend systems.</li>
+                    <li>I noticed something painful: we stress our servers more than our users do.</li>
+                    <li>Sometimes it's not traffic that kills performance — it's code.</li>
+                    <li>This talk is about those subtle anti-patterns that creep into our systems and quietly cause pain.</li>
+                </ul>
+            </section>
+
+            <!-- What Happens When Servers Are Stressed -->
+            <section>
+                <h2>What Happens When Servers Are Stressed?</h2>
+                <ul>
+                    <li>High p95/p99 latency</li>
+                    <li>Increased timeouts and failures</li>
+                    <li>Spikes in CPU/memory usage</li>
+                    <li>Infrastructure cost creep</li>
+                    <li>Cascading failures across services</li>
+                </ul>
+                <blockquote style="margin-top: 40px;">
+                    "It's not just scale that hurts systems — it's poor design under scale."
+                </blockquote>
+            </section>
+
+            <!-- Overview of 6 Anti-Patterns -->
+            <section>
+                <h2>6 Subtle Anti-Patterns That Stress Your Servers</h2>
+                <p>We'll go through each with examples and fixes:</p>
+                <ol>
+                    <li>Long request cycles</li>
+                    <li>OFFSET pagination</li>
+                    <li>N+1 queries</li>
+                    <li>Hot-path aggregations</li>
+                    <li>Fat payloads</li>
+                    <li>Multiple row locking</li>
+                </ol>
+            </section>
+
+            <!-- 1. Long Request Cycles -->
+            <section>
+                <h2>1. Long Request Cycles</h2>
+                <p><strong>Problem:</strong> Doing heavy work like image/PDF generation, DB writes, or S3 uploads inside HTTP requests.</p>
+                <div style="margin-top: 30px;">
+                    <p><strong>Why it's bad:</strong></p>
+                    <ul>
+                        <li>Slows response times</li>
+                        <li>Ties up workers</li>
+                        <li>Increases timeouts under load</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 1. Long Request Cycles - Fix -->
+            <section>
+                <h2>1. Long Request Cycles - The Fix</h2>
+                <p><strong>Before:</strong></p>
+                <pre><code class="language-python">@app.post("/generate-report")
+def generate_report(user_id: int):
+    data = fetch_data(user_id)  # 2 seconds
+    pdf = create_pdf(data)      # 5 seconds
+    url = upload_to_s3(pdf)     # 3 seconds
+    return {"url": url}         # Total: 10 seconds!</code></pre>
+                <p style="margin-top: 30px;"><strong>After:</strong> Use Celery, RQ, or any task queue</p>
+                <pre><code class="language-python">@app.post("/generate-report")
+def generate_report(user_id: int):
+    job = queue.enqueue(create_report_task, user_id)
+    return {"job_id": job.id, "status": "processing"}, 202
+
+# User polls /jobs/{job_id} or gets webhook when done</code></pre>
+                <p style="font-size: 0.8em; margin-top: 20px;">⚡ Response time: <span style="color: #ff6b6b;">10s</span> → <span style="color: #51cf66;">50ms</span></p>
+            </section>
+
+            <!-- 2. OFFSET Pagination -->
+            <section>
+                <h2>2. OFFSET Pagination</h2>
+                <p><strong>Problem:</strong> Using OFFSET for deep pagination</p>
+                <p style="font-size: 0.75em; margin-top: 15px;"><strong>Django:</strong></p>
+                <pre><code class="language-python"># View handling page 200 (50 items per page)
+def order_list(request):
+    page = int(request.GET.get('page', 1))  # page = 200
+    per_page = 50
+    offset = (page - 1) * per_page  # offset = 9950
+    
+    orders = Order.objects.order_by('-created_at')[offset:offset+per_page]
+    # Django generates: LIMIT 50 OFFSET 9950
+    # DB must scan 10,000 rows! 😱</code></pre>
+                <p style="font-size: 0.75em; margin-top: 20px;"><strong>SQL Generated:</strong></p>
+                <pre><code class="language-sql">SELECT * FROM orders ORDER BY created_at DESC 
+LIMIT 50 OFFSET 9950;</code></pre>
+                <div style="margin-top: 25px;">
+                    <p><strong>Why it's bad:</strong></p>
+                    <ul>
+                        <li>Deep pages = slow DB scans (skips 9,950 rows)</li>
+                        <li>Wasted CPU & I/O</li>
+                        <li>Gets slower as user goes deeper</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 2. OFFSET Pagination - Visual -->
+            <section>
+                <h2>2. OFFSET Pagination - The Problem</h2>
+                <p style="font-size: 0.8em; margin-bottom: 20px;">Typical e-commerce pagination UI:</p>
+                
+                <!-- Pagination UI Example -->
+                <div style="padding: 20px; background: rgba(255,255,255,0.05); border-radius: 10px;">
+                    <div style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 0.6em;">
+                        <span style="padding: 10px 15px; background: rgba(66, 175, 250, 0.3); border-radius: 5px; cursor: pointer;">1</span>
+                        <span style="padding: 10px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer;">2</span>
+                        <span style="padding: 10px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer;">3</span>
+                        <span style="padding: 10px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer;">4</span>
+                        <span style="padding: 10px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer;">5</span>
+                        <span style="padding: 10px 15px;">...</span>
+                        <span style="padding: 10px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer;">198</span>
+                        <span style="padding: 10px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer;">199</span>
+                        <span style="padding: 10px 15px; background: rgba(255, 107, 107, 0.5); border-radius: 5px; cursor: pointer; border: 2px solid #ff6b6b;">200</span>
+                        <span style="padding: 10px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer;">201</span>
+                        <span style="padding: 10px 15px; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer;">202</span>
+                    </div>
+                    <p style="font-size: 0.7em; margin-top: 20px; color: #ff6b6b;">👆 Clicking page 200 = DB scans and skips 9,950 rows!</p>
+                </div>
+                
+                <div style="margin-top: 30px; font-size: 0.75em;">
+                    <p><strong>Performance degradation:</strong></p>
+                    <ul style="margin-top: 15px;">
+                        <li>Page 1: ~10ms ✅</li>
+                        <li>Page 50: ~200ms ⚠️</li>
+                        <li>Page 200: ~2.5s 💀</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 2. OFFSET Pagination - Fix -->
+            <section>
+                <h2>2. OFFSET Pagination - The Fix (Cursor-Based)</h2>
+                <p style="font-size: 0.8em; margin-bottom: 15px;">Use keyset/cursor pagination - filter by last seen value instead of OFFSET</p>
+                <p><strong>Before (Django):</strong> OFFSET-based</p>
+                <pre><code class="language-python"># Slow for deep pages
+orders = Order.objects.order_by('-created_at')[offset:offset+50]
+# LIMIT 50 OFFSET 9950 - scans 10,000 rows!</code></pre>
+                <p style="margin-top: 25px;"><strong>After (Django):</strong> Cursor-based</p>
+                <pre><code class="language-python"># Fast for any page depth
+last_created_at = request.GET.get('cursor')  # From previous page
+if last_created_at:
+    orders = Order.objects.filter(
+        created_at__lt=last_created_at
+    ).order_by('-created_at')[:50]
+else:
+    orders = Order.objects.order_by('-created_at')[:50]
+
+# Return cursor for next page
+return JsonResponse({
+    'orders': [...],
+    'next_cursor': orders.last().created_at.isoformat()
+})</code></pre>
+                <p style="font-size: 0.75em; margin-top: 15px;">⚡ Uses index | 🚀 Constant performance at any depth</p>
+            </section>
+
+            <!-- 2. OFFSET Pagination - Fix Visual -->
+            <section>
+                <h2>2. Cursor Pagination - How It Works</h2>
+                <p style="font-size: 0.75em; margin-bottom: 15px;"><strong>SQL Generated:</strong></p>
+                <pre><code class="language-sql">-- Instead of OFFSET
+SELECT * FROM orders 
+WHERE created_at < '2024-01-15 10:30:00'  -- Last seen timestamp
+ORDER BY created_at DESC 
+LIMIT 50;  -- Only scans 50 rows!</code></pre>
+                <p style="font-size: 0.8em; margin-top: 25px;">📊 Performance: <span style="color: #ff6b6b;">2.5s</span> → <span style="color: #51cf66;">15ms</span> (consistent!)</p>
+                
+                <!-- Better Pagination UI Example -->
+                <div style="margin-top: 30px; padding: 20px; background: rgba(81, 207, 102, 0.1); border-radius: 10px; border: 2px solid rgba(81, 207, 102, 0.3);">
+                    <p style="font-size: 0.7em; margin-bottom: 15px; color: #51cf66;">Better UX alternatives:</p>
+                    <div style="display: flex; justify-content: center; gap: 15px; font-size: 0.6em;">
+                        <span style="padding: 10px 20px; background: rgba(81, 207, 102, 0.3); border-radius: 5px; cursor: pointer;">← Previous</span>
+                        <span style="padding: 10px 20px; background: rgba(81, 207, 102, 0.3); border-radius: 5px; cursor: pointer;">Next →</span>
+                    </div>
+                    <p style="font-size: 0.6em; margin-top: 15px; color: #a8a8a8;">Or: Infinite scroll / "Load More" button</p>
+                    <p style="font-size: 0.55em; margin-top: 10px; color: #a8a8a8;">Works perfectly with cursor pagination!</p>
+                </div>
+            </section>
+
+            <!-- 3. N+1 Queries -->
+            <section>
+                <h2>3. N+1 Queries</h2>
+                <p><strong>Problem:</strong> Fetching related data in loops:</p>
+                <pre><code class="language-python">posts = Post.objects.all()  # 1 query
+for post in posts:
+    print(post.author.name)  # 1 query each = 100 queries!</code></pre>
+                <div style="margin-top: 30px;">
+                    <p><strong>Why it's bad:</strong></p>
+                    <ul>
+                        <li>1 query becomes 101</li>
+                        <li>Latency grows with data size</li>
+                    </ul>
+                </div>
+                <p style="margin-top: 20px; font-size: 0.85em;">100 posts = 101 DB roundtrips! 🔥</p>
+            </section>
+
+            <!-- 3. N+1 Queries - Fix -->
+            <section>
+                <h2>3. N+1 Queries - The Fix</h2>
+                <p><strong>Before:</strong> N+1 queries (Django example)</p>
+                <pre><code class="language-python">posts = Post.objects.all()
+for post in posts:
+    print(post.author.name)  # Hits DB every time
+# Result: 1 + 100 = 101 queries</code></pre>
+                <p style="margin-top: 30px;"><strong>After:</strong> Eager loading with <code>select_related</code></p>
+                <pre><code class="language-python">posts = Post.objects.select_related('author').all()
+for post in posts:
+    print(post.author.name)  # Already loaded!
+# Result: 1 query with JOIN</code></pre>
+                <p style="font-size: 0.8em; margin-top: 20px;">⚡ <span style="color: #ff6b6b;">101 queries</span> → <span style="color: #51cf66;">1 query</span></p>
+                <p style="font-size: 0.75em; margin-top: 10px;">Use <code>select_related()</code> for ForeignKey & OneToOne (uses SQL JOIN)</p>
+            </section>
+
+            <!-- 3. N+1 Queries - prefetch_related -->
+            <section>
+                <h2>3. N+1 Queries - prefetch_related</h2>
+                <p style="font-size: 0.8em; margin-bottom: 15px;">For ManyToMany and reverse ForeignKey relationships</p>
+                <p><strong>Problem:</strong> N+1 with tags (ManyToMany)</p>
+                <pre><code class="language-python">posts = Post.objects.all()
+for post in posts:
+    for tag in post.tags.all():  # Hits DB every time!
+        print(tag.name)
+# Result: 1 + 100 = 101 queries</code></pre>
+                <p style="margin-top: 25px;"><strong>Fix:</strong> Use <code>prefetch_related</code></p>
+                <pre><code class="language-python">posts = Post.objects.prefetch_related('tags').all()
+for post in posts:
+    for tag in post.tags.all():  # Already loaded!
+        print(tag.name)
+# Result: 2 queries (1 for posts, 1 for all tags)</code></pre>
+                <p style="font-size: 0.8em; margin-top: 20px;">⚡ <span style="color: #ff6b6b;">101 queries</span> → <span style="color: #51cf66;">2 queries</span></p>
+                <p style="font-size: 0.75em; margin-top: 10px;">Use <code>prefetch_related()</code> for ManyToMany & reverse FK (separate queries)</p>
+            </section>
+
+            <!-- 3. N+1 Queries - Comparison -->
+            <section>
+                <h2>3. select_related vs prefetch_related</h2>
+                <div style="display: flex; gap: 20px; margin-top: 30px; font-size: 0.75em;">
+                    <div style="flex: 1; background: rgba(66, 175, 250, 0.1); padding: 20px; border-radius: 8px; border: 2px solid rgba(66, 175, 250, 0.3);">
+                        <h3 style="color: #42affa; font-size: 1.1em; margin-bottom: 15px;">select_related()</h3>
+                        <p style="margin-bottom: 10px;"><strong>How it works:</strong></p>
+                        <ul style="font-size: 0.9em;">
+                            <li>Uses SQL JOIN</li>
+                            <li>Single query</li>
+                            <li>More efficient</li>
+                        </ul>
+                        <p style="margin-top: 15px;"><strong>Use for:</strong></p>
+                        <ul style="font-size: 0.9em;">
+                            <li><strong>ForeignKey:</strong> post.author</li>
+                            <li><strong>OneToOne:</strong> user.profile</li>
+                        </ul>
+                        <p style="margin-top: 15px; font-size: 0.85em;"><strong>Example:</strong></p>
+                        <pre style="font-size: 0.7em;"><code class="language-python">Post.objects.select_related(
+    'author', 'category'
+)</code></pre>
+                    </div>
+                    <div style="flex: 1; background: rgba(81, 207, 102, 0.1); padding: 20px; border-radius: 8px; border: 2px solid rgba(81, 207, 102, 0.3);">
+                        <h3 style="color: #51cf66; font-size: 1.1em; margin-bottom: 15px;">prefetch_related()</h3>
+                        <p style="margin-bottom: 10px;"><strong>How it works:</strong></p>
+                        <ul style="font-size: 0.9em;">
+                            <li>Separate queries</li>
+                            <li>Python joins data</li>
+                            <li>Handles complex relations</li>
+                        </ul>
+                        <p style="margin-top: 15px;"><strong>Use for:</strong></p>
+                        <ul style="font-size: 0.9em;">
+                            <li><strong>ManyToMany:</strong> post.tags</li>
+                            <li><strong>Reverse FK:</strong> author.posts</li>
+                        </ul>
+                        <p style="margin-top: 15px; font-size: 0.85em;"><strong>Example:</strong></p>
+                        <pre style="font-size: 0.7em;"><code class="language-python">Post.objects.prefetch_related(
+    'tags', 'comments'
+)</code></pre>
+                    </div>
+                </div>
+                <p style="margin-top: 25px; font-size: 0.8em;">💡 <strong>Pro tip:</strong> Combine them! <code>Post.objects.select_related('author').prefetch_related('tags')</code></p>
+            </section>
+
+            <!-- 4. Hot-Path Aggregations -->
+            <section>
+                <h2>4. Hot-Path Aggregations</h2>
+                <p><strong>Problem:</strong> Running expensive aggregations on every request</p>
+                <pre><code class="language-python"># Django view - runs on EVERY dashboard load
+def dashboard(request):
+    total_users = User.objects.count()  # COUNT(*) on 10M rows
+    total_revenue = Order.objects.aggregate(
+        total=Sum('amount')
+    )['total']  # SUM() on millions of rows
+    avg_order = Order.objects.aggregate(
+        avg=Avg('amount')
+    )['avg']  # AVG() calculation
+    
+    return render(request, 'dashboard.html', {
+        'total_users': total_users,      # 800ms
+        'total_revenue': total_revenue,  # 1.2s
+        'avg_order': avg_order,          # 950ms
+    })  # Total: 3 seconds PER page load! 😱</code></pre>
+                <div style="margin-top: 25px;">
+                    <p><strong>Why it's bad:</strong></p>
+                    <ul>
+                        <li>Expensive queries on every page load</li>
+                        <li>Blocks other queries (table locks)</li>
+                        <li>High CPU/memory usage</li>
+                        <li>Poor user experience (slow dashboards)</li>
+                    </ul>
+                </div>
+                <p style="margin-top: 20px; font-size: 0.85em;">💀 100 users viewing dashboard = 100 full table scans!</p>
+            </section>
+
+            <!-- 4. Hot-Path Aggregations - Fix 1 -->
+            <section>
+                <h2>4. Hot-Path Aggregations - Fix #1: Caching</h2>
+                <p style="font-size: 0.8em; margin-bottom: 20px;">Store computed results in Redis/Memcached, refresh periodically in background</p>
+                <p><strong>Before:</strong> Count on every request</p>
+                <pre><code class="language-python"># Django view
+def dashboard(request):
+    total_users = User.objects.count()  # 800ms on 10M rows
+    return JsonResponse({"total_users": total_users})</code></pre>
+                <p style="margin-top: 25px;"><strong>After:</strong> Cache + background refresh (Django + Celery)</p>
+                <pre><code class="language-python"># View - reads from cache
+def dashboard(request):
+    total_users = cache.get("total_users", 0)  # 2ms!
+    return JsonResponse({"total_users": total_users})
+
+# Celery task - runs every 5 minutes
+@shared_task
+def update_user_stats():
+    count = User.objects.count()
+    cache.set("total_users", count, timeout=300)  # 5 min TTL</code></pre>
+                <p style="font-size: 0.8em; margin-top: 20px;">⚡ <span style="color: #ff6b6b;">800ms</span> → <span style="color: #51cf66;">2ms</span></p>
+                <p style="font-size: 0.7em; margin-top: 10px;">✅ Simple | ⚡ Fastest | ⚠️ Lost on restart</p>
+            </section>
+
+            <!-- 4. Hot-Path Aggregations - Fix 2 - Part 1 -->
+            <section>
+                <h2>4. Hot-Path Aggregations - Fix #2: Stats Table</h2>
+                <p style="font-size: 0.8em; margin-bottom: 20px;">Persist stats in DB table, update via signals or background jobs</p>
+                <p><strong>Django Model:</strong></p>
+                <pre><code class="language-python"># models.py
+class SystemStats(models.Model):
+    metric_name = models.CharField(max_length=100, primary_key=True)
+    metric_value = models.BigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name_plural = "System Stats"
+        
+    def __str__(self):
+        return f"{self.metric_name}: {self.metric_value}"</code></pre>
+                <p style="margin-top: 30px;"><strong>View - Fast read from stats table:</strong></p>
+                <pre><code class="language-python">def dashboard(request):
+    stats = SystemStats.objects.get(metric_name='total_users')
+    return JsonResponse({"total_users": stats.metric_value})
+    # Fast indexed lookup! No COUNT() needed</code></pre>
+                <p style="font-size: 0.75em; margin-top: 20px;">✅ Persistent | ⚡ Sub-millisecond reads | 💾 Survives restarts</p>
+            </section>
+
+            <!-- 4. Hot-Path Aggregations - Fix 2 - Part 2 -->
+            <section>
+                <h2>4. Stats Table - Update Options</h2>
+                <p style="font-size: 0.8em; margin-bottom: 20px;">Two ways to keep stats up-to-date:</p>
+                <div style="display: flex; gap: 20px; margin-top: 20px;">
+                    <div style="flex: 1; background: rgba(81, 207, 102, 0.1); padding: 20px; border-radius: 8px; border: 2px solid rgba(81, 207, 102, 0.3);">
+                        <h3 style="color: #51cf66; font-size: 0.9em; margin-bottom: 15px;">Option A: Django Signals</h3>
+                        <p style="font-size: 0.65em; margin-bottom: 10px;">Updates happen <strong>immediately</strong> on every User save</p>
+                        <pre style="font-size: 0.55em;"><code class="language-python">from django.db.models.signals import post_save
+from django.dispatch import receiver
+
+@receiver(post_save, sender=User)
+def update_user_count(sender, **kwargs):
+    stats, _ = SystemStats.objects\
+        .get_or_create(
+            metric_name='total_users'
+        )
+    stats.metric_value = User.objects.count()
+    stats.save()</code></pre>
+                        <p style="font-size: 0.6em; margin-top: 10px;">✅ Real-time | ⚠️ Adds overhead to saves</p>
+                    </div>
+                    <div style="flex: 1; background: rgba(66, 175, 250, 0.1); padding: 20px; border-radius: 8px; border: 2px solid rgba(66, 175, 250, 0.3);">
+                        <h3 style="color: #42affa; font-size: 0.9em; margin-bottom: 15px;">Option B: Background Job</h3>
+                        <p style="font-size: 0.65em; margin-bottom: 10px;">Updates run <strong>periodically</strong> (every 10 min)</p>
+                        <pre style="font-size: 0.55em;"><code class="language-python">from celery import shared_task
+
+@shared_task
+def refresh_stats():
+    SystemStats.objects.update_or_create(
+        metric_name='total_users',
+        defaults={
+            'metric_value': 
+                User.objects.count()
+        }
+    )
+    
+# Schedule in celery beat
+# '*/10 * * * *'  # Every 10 min</code></pre>
+                        <p style="font-size: 0.6em; margin-top: 10px;">✅ Less load | ⚠️ Slightly stale data</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. Hot-Path Aggregations - Fix 3 - Part 1 -->
+            <section>
+                <h2>4. Hot-Path Aggregations - Fix #3: Materialized Views</h2>
+                <p style="font-size: 0.8em; margin-bottom: 20px;">DB-native precomputed views (PostgreSQL). Great for complex multi-table aggregations</p>
+                <p><strong>Create Materialized View (PostgreSQL):</strong></p>
+                <pre><code class="language-sql">-- SQL migration
+CREATE MATERIALIZED VIEW user_stats_mv AS
+SELECT 
+    COUNT(*) as total_users,
+    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days') 
+        as new_users,
+    COUNT(*) FILTER (WHERE is_active = true) as active_users,
+    AVG(EXTRACT(YEAR FROM age(date_of_birth))) as avg_age
+FROM auth_user;
+
+-- Add index for faster reads
+CREATE INDEX ON user_stats_mv (total_users);</code></pre>
+                <p style="margin-top: 25px; font-size: 0.75em;">💡 The view is <strong>precomputed</strong> and stored like a table</p>
+                <p style="font-size: 0.75em; margin-top: 10px;">✅ Handles complex aggregations with JOINs, FILTERs, etc.</p>
+                <p style="font-size: 0.75em; margin-top: 10px;">⚡ Reads are as fast as regular table queries</p>
+            </section>
+
+            <!-- 4. Hot-Path Aggregations - Fix 3 - Part 2 -->
+            <section>
+                <h2>4. Materialized Views - Django Model</h2>
+                <p style="font-size: 0.8em; margin-bottom: 20px;">Create an unmanaged Django model to query the view</p>
+                <p><strong>Django Model (unmanaged):</strong></p>
+                <pre><code class="language-python"># models.py - represents the materialized view
+class UserStatsMV(models.Model):
+    total_users = models.BigIntegerField()
+    new_users = models.BigIntegerField()
+    active_users = models.BigIntegerField()
+    avg_age = models.FloatField()
+    
+    class Meta:
+        managed = False  # Django won't create/migrate this
+        db_table = 'user_stats_mv'  # Points to our MV
+        
+    def __str__(self):
+        return f"User Stats: {self.total_users} total"</code></pre>
+                <p style="margin-top: 30px; font-size: 0.8em;">💡 <code>managed = False</code> tells Django this table exists but not to touch it</p>
+                <p style="font-size: 0.75em; margin-top: 15px;">✅ No migrations needed | 🔍 Use Django ORM normally</p>
+            </section>
+
+            <!-- 4. Hot-Path Aggregations - Fix 3 - Part 3 -->
+            <section>
+                <h2>4. Materialized Views - Query & Refresh</h2>
+                <p style="font-size: 0.8em; margin-bottom: 20px;">Query the view like any other Django model</p>
+                <p><strong>View - Query like any model:</strong></p>
+                <pre><code class="language-python">def dashboard(request):
+    stats = UserStatsMV.objects.first()
+    return JsonResponse({
+        'total': stats.total_users,
+        'new': stats.new_users,
+        'active': stats.active_users,
+        'avg_age': stats.avg_age
+    })  # Fast! No aggregation at query time</code></pre>
+                <p style="margin-top: 30px;"><strong>Refresh with Celery:</strong></p>
+                <pre><code class="language-python">from django.db import connection
+
+@shared_task
+def refresh_user_stats():
+    with connection.cursor() as cursor:
+        cursor.execute("REFRESH MATERIALIZED VIEW user_stats_mv;")
+        
+# Schedule with Celery Beat - runs every hour</code></pre>
+                <p style="font-size: 0.75em; margin-top: 20px;">💾 Persistent | 📊 Complex queries | ⏰ Hourly/daily refresh</p>
+            </section>
+
+            <!-- 4. Hot-Path Aggregations - Summary -->
+            <section>
+                <h2>4. Hot-Path Aggregations - Choose Your Fix</h2>
+                <div style="font-size: 0.7em; text-align: left; margin: 0 auto; max-width: 1000px;">
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #42affa;">
+                                <th style="padding: 12px; text-align: left;">Strategy</th>
+                                <th style="padding: 12px; text-align: left;">Django Tools</th>
+                                <th style="padding: 12px; text-align: left;">Pros</th>
+                                <th style="padding: 12px; text-align: left;">Cons</th>
+                                <th style="padding: 12px; text-align: left;">Best For</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <td style="padding: 12px;"><strong style="color: #51cf66;">Caching</strong></td>
+                                <td style="padding: 12px;">django.cache<br/>Celery Beat</td>
+                                <td style="padding: 12px;">⚡ Fastest<br/>✅ Easy setup</td>
+                                <td style="padding: 12px;">⚠️ Volatile<br/>🔄 Invalidation</td>
+                                <td style="padding: 12px;">High-traffic<br/>Short-lived stats</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <td style="padding: 12px;"><strong style="color: #42affa;">Stats Table</strong></td>
+                                <td style="padding: 12px;">Django Model<br/>Signals/Tasks</td>
+                                <td style="padding: 12px;">💾 Persistent<br/>🔄 Flexible timing</td>
+                                <td style="padding: 12px;">📝 Extra table<br/>🔧 Manual setup</td>
+                                <td style="padding: 12px;">Business KPIs<br/>Reports</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 12px;"><strong style="color: #ffd43b;">Materialized Views</strong></td>
+                                <td style="padding: 12px;">Unmanaged Model<br/>Raw SQL + Task</td>
+                                <td style="padding: 12px;">💪 Complex joins<br/>🗄️ DB-native</td>
+                                <td style="padding: 12px;">🔒 PostgreSQL only<br/>⏱️ Refresh cost</td>
+                                <td style="padding: 12px;">Analytics<br/>Multi-table aggs</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p style="margin-top: 30px; font-size: 0.8em;">💡 <strong>Pro tip:</strong> Combine strategies! Cache stats table reads for maximum speed.</p>
+                <p style="margin-top: 10px; font-size: 0.75em;">🐍 <strong>Django specific:</strong> Use Celery Beat for scheduling all refresh tasks</p>
+            </section>
+
+            <!-- 5. Fat Payloads -->
+            <section>
+                <h2>5. Fat Payloads</h2>
+                <p><strong>Problem:</strong> Sending or receiving unnecessarily large data</p>
+                <div style="margin-top: 30px;">
+                    <p><strong>Two scenarios:</strong></p>
+                    <div style="display: flex; gap: 20px; margin-top: 20px; font-size: 0.8em;">
+                        <div style="flex: 1; background: rgba(255, 107, 107, 0.1); padding: 15px; border-radius: 8px; border: 2px solid rgba(255, 107, 107, 0.3);">
+                            <h3 style="color: #ff6b6b; font-size: 1em; margin-bottom: 10px;">① Heavy Output (Responses)</h3>
+                            <ul style="font-size: 0.9em;">
+                                <li>Sending entire objects</li>
+                                <li>Base64 images in JSON</li>
+                                <li>Unused fields</li>
+                                <li>Eats RAM & bandwidth</li>
+                            </ul>
+                        </div>
+                        <div style="flex: 1; background: rgba(255, 107, 107, 0.1); padding: 15px; border-radius: 8px; border: 2px solid rgba(255, 107, 107, 0.3);">
+                            <h3 style="color: #ff6b6b; font-size: 1em; margin-bottom: 10px;">② Heavy Input (Requests)</h3>
+                            <ul style="font-size: 0.9em;">
+                                <li>Large file uploads in JSON</li>
+                                <li>Slow deserialization</li>
+                                <li>Memory exhaustion</li>
+                                <li>Incomplete/failed requests</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <p style="margin-top: 20px; font-size: 0.85em;">💀 Both stress your server and hurt performance!</p>
+            </section>
+
+            <!-- 5. Fat Payloads - Output Problem -->
+            <section>
+                <h2>5. Fat Payloads - Problem #1: Heavy Output</h2>
+                <p style="font-size: 0.8em; margin-bottom: 15px;">Sending too much data in API responses</p>
+                <p><strong>Before (Django):</strong> Returning everything</p>
+                <pre><code class="language-python">from rest_framework import serializers, viewsets
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = '__all__'  # Returns ALL fields! 😱
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    
+# Response for 100 users: 2.5MB
+# Includes: profile_pic (base64), bio, preferences, metadata, etc.</code></pre>
+                <div style="margin-top: 20px;">
+                    <p><strong>Problems:</strong></p>
+                    <ul style="font-size: 0.85em;">
+                        <li>Eats server RAM serializing large objects</li>
+                        <li>Slow network transfer</li>
+                        <li>Client struggles parsing huge JSON</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 5. Fat Payloads - Output Fix -->
+            <section>
+                <h2>5. Fat Payloads - Fix #1: Slim Output</h2>
+                <p style="font-size: 0.8em; margin-bottom: 15px;">Return only what's needed</p>
+                <p><strong>After (Django):</strong> Field selection</p>
+                <pre><code class="language-python">class UserListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email']  # Only essentials
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.only('id', 'name', 'email')  # DB level
+    
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return UserListSerializer  # Slim for lists
+        return UserDetailSerializer  # Full for detail view</code></pre>
+                <p style="margin-top: 20px;"><strong>For images:</strong></p>
+                <pre><code class="language-python"># ❌ Don't do this
+return {'image': base64.b64encode(image_data)}
+
+# ✅ Do this
+return {'image_url': f'https://cdn.example.com/imgs/{user.id}.jpg'}</code></pre>
+                <p style="font-size: 0.8em; margin-top: 15px;">📦 Payload: <span style="color: #ff6b6b;">2.5MB</span> → <span style="color: #51cf66;">15KB</span> (gzipped)</p>
+            </section>
+
+            <!-- 5. Fat Payloads - Input Problem -->
+            <section>
+                <h2>5. Fat Payloads - Problem #2: Heavy Input</h2>
+                <p style="font-size: 0.8em; margin-bottom: 15px;">Receiving large data in requests</p>
+                <p><strong>Before (Django):</strong> Large JSON uploads</p>
+                <pre><code class="language-python">class BulkUploadView(APIView):
+    def post(self, request):
+        # Client sends 50MB JSON with 10,000 records + images
+        data = request.data  # Loads entire payload into memory!
+        
+        for item in data['items']:  # 10,000 items
+            User.objects.create(
+                name=item['name'],
+                profile_pic=item['image_base64']  # Huge!
+            )
+        return Response({'status': 'ok'})</code></pre>
+                <div style="margin-top: 20px;">
+                    <p><strong>Problems:</strong></p>
+                    <ul style="font-size: 0.85em;">
+                        <li>50MB payload exhausts RAM</li>
+                        <li>Slow JSON deserialization (seconds)</li>
+                        <li>Request timeout before complete</li>
+                        <li>Nginx/Load balancer may reject (size limits)</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 5. Fat Payloads - Input Fix -->
+            <section>
+                <h2>5. Fat Payloads - Fix #2: Handle Input Properly</h2>
+                <p style="font-size: 0.8em; margin-bottom: 15px;">Use proper file handling + background processing</p>
+                <p><strong>Solution:</strong> File upload + background processing</p>
+                <pre><code class="language-python">class BulkUploadView(APIView):
+    def post(self, request):
+        file = request.FILES.get('csv_file')  # Not JSON!
+        
+        # Stream file to S3/storage (doesn't load into memory)
+        upload_path = default_storage.save(f'uploads/{file.name}', file)
+        
+        # Process in background worker
+        process_bulk_upload.delay(upload_path)
+        
+        return Response({
+            'job_id': '...',
+            'status': 'processing'
+        }, status=202)
+
+# Background task processes file line by line
+@shared_task
+def process_bulk_upload(file_path):
+    with default_storage.open(file_path, 'r') as f:
+        for line in f:  # Stream processing
+            data = json.loads(line)
+            User.objects.create(name=data['name'])</code></pre>
+                <p style="font-size: 0.75em; margin-top: 20px;">✅ File streaming (no memory spike) | 🔄 Background processing</p>
+                <p style="font-size: 0.75em; margin-top: 10px;">⚙️ Set request size limits: <code>DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024</code> (10MB)</p>
+            </section>
+
+            <!-- 6. Multiple Row Locking -->
+            <section>
+                <h2>6. Multiple Row Locking</h2>
+                <p><strong>Problem:</strong> Too many concurrent locks stress the database</p>
+                <p style="font-size: 0.8em; margin-top: 15px;"><strong>Scenario:</strong> Processing 100 payments concurrently</p>
+                <pre><code class="language-python"># Cron job queues 100 individual payment tasks
+@periodic_task(run_every=crontab(minute='*'))
+def queue_pending_payments():
+    payments = Payment.objects.filter(status='pending')
+    for payment in payments:  # 100 pending payments
+        process_single_payment.delay(payment.id)  # 100 tasks!
+
+# Workers process payments concurrently
+@shared_task
+def process_single_payment(payment_id):
+    # Each locks ONE row
+    payment = Payment.objects.select_for_update().get(id=payment_id)
+    charge_customer(payment)  # Takes 2-3 seconds
+    payment.status = 'completed'
+    payment.save()
+    
+# Problem: 100 concurrent locks stress the database! 😱</code></pre>
+                <p style="margin-top: 20px; font-size: 0.85em;">🔥 100 concurrent row locks = high DB contention and CPU usage!</p>
+            </section>
+
+            <!-- 6. Multiple Row Locking - The Problem -->
+            <section>
+                <h2>6. Multiple Row Locking - Database Stress</h2>
+                <div style="margin-top: 30px;">
+                    <p><strong>What happens with 100 concurrent locks:</strong></p>
+                    <ul style="font-size: 0.85em;">
+                        <li><strong>Lock table bloat:</strong> DB tracks 100 active row locks</li>
+                        <li><strong>High lock contention:</strong> Lock manager under heavy load</li>
+                        <li><strong>Increased CPU usage:</strong> DB managing many concurrent transactions</li>
+                        <li><strong>Memory pressure:</strong> Each lock consumes memory</li>
+                        <li><strong>Slower queries:</strong> Other queries wait for lock checks</li>
+                        <li><strong>Connection pool exhaustion:</strong> 100 connections held open</li>
+                    </ul>
+                </div>
+                <div style="margin-top: 30px; padding: 20px; background: rgba(255, 107, 107, 0.1); border-radius: 10px; border: 2px solid rgba(255, 107, 107, 0.3);">
+                    <p style="font-size: 0.8em; margin-bottom: 15px;"><strong>The Impact:</strong></p>
+                    <p style="font-size: 0.75em;">🔥 100 workers each locking 1 payment row</p>
+                    <p style="font-size: 0.75em; margin-top: 10px;">= 100 active transactions</p>
+                    <p style="font-size: 0.75em;">= 100 row locks in lock table</p>
+                    <p style="font-size: 0.75em;">= 100 open DB connections</p>
+                    <p style="font-size: 0.7em; margin-top: 15px; color: #ff6b6b;"><strong>Database is overwhelmed managing all these locks!</strong></p>
+                </div>
+            </section>
+
+            <!-- 6. Multiple Row Locking - Fix -->
+            <section>
+                <h2>6. Multiple Row Locking - The Fix</h2>
+                <p style="font-size: 0.8em; margin-bottom: 15px;">Limit concurrent processing or use optimistic locking</p>
+                <p><strong>Current Setup:</strong> Cron queues 100 tasks, all run concurrently</p>
+                <pre><code class="language-python">@periodic_task(run_every=crontab(minute='*'))
+def queue_pending_payments():
+    payments = Payment.objects.filter(status='pending')
+    for payment in payments:  # 100 pending payments
+        process_single_payment.delay(payment.id)  # 100 tasks!
+        
+# All 100 run concurrently = 100 locks! 😱</code></pre>
+                <p style="margin-top: 25px;"><strong>Fix Option 1:</strong> Limit Celery worker concurrency</p>
+                <pre><code class="language-python"># Same code, but configure Celery workers
+# celery -A myapp worker --concurrency=10
+
+# Now only 10 payments processed at once
+# Remaining 90 wait in queue
+# Result: Max 10 concurrent locks instead of 100!</code></pre>
+                <p style="font-size: 0.75em; margin-top: 15px;">⚙️ Set <code>CELERYD_CONCURRENCY=10</code> or use <code>--concurrency</code> flag</p>
+            </section>
+
+            <!-- 6. Multiple Row Locking - How Limiting Works -->
+            <section>
+                <h2>6. How Limiting Concurrency Works</h2>
+                <p style="font-size: 0.75em; margin-bottom: 15px;"><strong>With limited worker concurrency:</strong></p>
+                <div style="margin-top: 20px;">
+                    <p><strong>Scenario: 100 tasks queued, 10 worker threads</strong></p>
+                    <ul style="font-size: 0.8em;">
+                        <li><strong>Workers 1-10:</strong> Each picks a task, locks 1 payment, processes</li>
+                        <li><strong>Remaining tasks:</strong> Wait in queue until worker is free</li>
+                        <li><strong>At any time:</strong> Maximum 10 concurrent locks (not 100!)</li>
+                        <li><strong>Processing:</strong> Still efficient, tasks processed continuously</li>
+                    </ul>
+                </div>
+                <div style="margin-top: 30px; padding: 20px; background: rgba(81, 207, 102, 0.1); border-radius: 10px; border: 2px solid rgba(81, 207, 102, 0.3);">
+                    <p style="font-size: 0.8em; margin-bottom: 15px;"><strong>Result:</strong></p>
+                    <p style="font-size: 0.75em;">✅ <span style="color: #ff6b6b;">100</span> → <span style="color: #51cf66;">10</span> concurrent locks</p>
+                    <p style="font-size: 0.75em;">✅ <span style="color: #ff6b6b;">100</span> → <span style="color: #51cf66;">10</span> DB connections</p>
+                    <p style="font-size: 0.75em;">✅ Reduced DB CPU, memory, and lock contention</p>
+                    <p style="font-size: 0.75em;">✅ Same total throughput, less DB stress</p>
+                </div>
+            </section>
+
+            <!-- 6. Multiple Row Locking - Fix 2: Optimistic Locking -->
+            <section>
+                <h2>6. Fix #2: Optimistic Locking</h2>
+                <p style="font-size: 0.8em; margin-bottom: 15px;">No locks! Use version field to detect conflicts</p>
+                <p><strong>Add version field to model:</strong></p>
+                <pre><code class="language-python">class Payment(models.Model):
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=20)
+    version = models.IntegerField(default=0)  # Version field!</code></pre>
+                <p style="margin-top: 25px;"><strong>Process without locks:</strong></p>
+                <pre><code class="language-python">@shared_task
+def process_single_payment(payment_id):
+    # Read WITHOUT locking
+    payment = Payment.objects.get(id=payment_id)
+    old_version = payment.version
+    
+    # Do expensive processing (no lock held!)
+    charge_customer(payment)
+    
+    # Update only if version hasn't changed
+    updated = Payment.objects.filter(
+        id=payment_id,
+        version=old_version  # Check version hasn't changed
+    ).update(
+        status='completed',
+        version=old_version + 1  # Increment version
+    )
+    
+    if not updated:
+        # Someone else updated it, retry or skip
+        raise Retry()</code></pre>
+            </section>
+
+            <!-- 6. Multiple Row Locking - Optimistic vs Pessimistic -->
+            <section>
+                <h2>6. Optimistic vs Pessimistic Locking</h2>
+                <div style="display: flex; gap: 20px; margin-top: 30px; font-size: 0.75em;">
+                    <div style="flex: 1; background: rgba(81, 207, 102, 0.1); padding: 20px; border-radius: 8px; border: 2px solid rgba(81, 207, 102, 0.3);">
+                        <h3 style="color: #51cf66; font-size: 1.1em; margin-bottom: 15px;">Optimistic Locking</h3>
+                        <p style="margin-bottom: 10px;"><strong>How it works:</strong></p>
+                        <ul style="font-size: 0.9em;">
+                            <li>Read without lock</li>
+                            <li>Process (long operation)</li>
+                            <li>Update with version check</li>
+                            <li>Retry if version changed</li>
+                        </ul>
+                        <p style="margin-top: 15px;"><strong>Best for:</strong></p>
+                        <ul style="font-size: 0.9em;">
+                            <li>Low contention</li>
+                            <li>Long processing time</li>
+                            <li>Many concurrent reads</li>
+                        </ul>
+                        <p style="margin-top: 15px; color: #51cf66;">✅ No locks = no DB stress!</p>
+                    </div>
+                    <div style="flex: 1; background: rgba(66, 175, 250, 0.1); padding: 20px; border-radius: 8px; border: 2px solid rgba(66, 175, 250, 0.3);">
+                        <h3 style="color: #42affa; font-size: 1.1em; margin-bottom: 15px;">Pessimistic Locking</h3>
+                        <p style="margin-bottom: 10px;"><strong>How it works:</strong></p>
+                        <ul style="font-size: 0.9em;">
+                            <li>Lock row (SELECT FOR UPDATE)</li>
+                            <li>Process while locked</li>
+                            <li>Update</li>
+                            <li>Unlock</li>
+                        </ul>
+                        <p style="margin-top: 15px;"><strong>Best for:</strong></p>
+                        <ul style="font-size: 0.9em;">
+                            <li>High contention</li>
+                            <li>Short processing time</li>
+                            <li>Must prevent conflicts</li>
+                        </ul>
+                        <p style="margin-top: 15px; color: #42affa;">✅ Guaranteed no conflicts</p>
+                    </div>
+                </div>
+                <p style="margin-top: 25px; font-size: 0.8em;">💡 <strong>Tip:</strong> Use optimistic locking for 100 concurrent payments to eliminate DB lock stress!</p>
+            </section>
+
+            <!-- Server Health Checklist -->
+            <section>
+                <h2>Server Health Checklist ✅</h2>
+                <ul class="checklist">
+                    <li>☐ Offload long work to background queues</li>
+                    <li>☐ Avoid OFFSET – use keyset pagination</li>
+                    <li>☐ Kill N+1s with eager loading</li>
+                    <li>☐ Cache or precompute heavy stats</li>
+                    <li>☐ Trim API payloads</li>
+                    <li>☐ Avoid locking many rows at once</li>
+                </ul>
+            </section>
+
+            <!-- Final Thoughts -->
+            <section>
+                <h2>Final Thoughts</h2>
+                <ul>
+                    <li>Performance is systemic, not just code-deep.</li>
+                    <li>Your server is doing its best — help it breathe.</li>
+                    <li>Empathy isn't just for users… it's for infrastructure too.</li>
+                </ul>
+            </section>
+
+            <!-- Q&A -->
+            <section>
+                <h2>Q&A</h2>
+                <p style="font-size: 1.2em; margin: 50px 0;">Let's talk backend pain.</p>
+                <div class="social-links">
+                    <p><strong>@taycode</strong></p>
+                    <p>GitHub | LinkedIn | Twitter/X</p>
+                    <p style="margin-top: 30px; font-size: 0.9em;">
+                        <a href="https://github.com/Taycode" style="color: #42affa;">github.com/TayCode</a><br>
+                        <a href="https://www.linkedin.com/in/abdulmateen-tairu/" style="color: #42affa;">linkedin.com/in/abdulmateen-tairu</a><br>
+                        <a href="https://twitter.com/TayCode" style="color: #42affa;">twitter.com/TayCode</a>
+                    </p>
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/plugin/highlight/highlight.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.5.0/plugin/notes/notes.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            center: true,
+            slideNumber: true,
+            transition: 'slide',
+            plugins: [ RevealHighlight, RevealNotes ],
+            width: 1280,
+            height: 720,
+            margin: 0.1,
+            minScale: 0.2,
+            maxScale: 2.0
+        });
+    </script>
+</body>
+</html>
+
