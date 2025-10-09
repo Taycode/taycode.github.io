@@ -1,368 +1,824 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<title> Abdulmateen Tairu - Software Engineer </title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abdulmateen Tairu - Software Engineer</title>
+    <meta name="description" content="Abdulmateen Tairu - Software Engineer with 7 years of experience in backend systems, AI/ML, and distributed applications. Python, TypeScript, Django, FastAPI.">
+    <meta name="author" content="Abdulmateen Tairu">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-	<!-- Meta -->
-	<meta charset="utf-8">
-	<meta http-equiv="X-UA-Compatible" content="IE=edge">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta name="description" content="">
-	<meta name="author" content="Xiaoying Riley at 3rd Wave Media">
-	<link rel="shortcut icon" href="favicon.ico">
+        :root {
+            --primary: #000000;
+            --secondary: #2c3e50;
+            --accent: #666666;
+            --background: #ffffff;
+            --light-bg: #f8f9fa;
+            --border: #e0e0e0;
+        }
 
-	<!-- Google Fonts -->
-	<link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,900" rel="stylesheet">
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            color: var(--secondary);
+            background: var(--light-bg);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
 
-	<!-- FontAwesome JS-->
-	<script defer src="assets/fontawesome/js/all.min.js"></script>
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
 
-	<!-- Theme CSS -->
-	<link id="theme-style" rel="stylesheet" href="assets/css/devresume.css">
-	<link rel="stylesheet" href="assets/css/style.css">
+        /* Header */
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 60px 0;
+            text-align: center;
+        }
 
+        .header-content h1 {
+            font-size: 3rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        .header-content .tagline {
+            font-size: 1.3rem;
+            font-weight: 300;
+            margin-bottom: 30px;
+            opacity: 0.9;
+        }
+
+        .header-links {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .header-links a {
+            color: white;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1rem;
+            transition: opacity 0.3s;
+        }
+
+        .header-links a:hover {
+            opacity: 0.7;
+        }
+
+        /* Main Content */
+        main {
+            background: white;
+            margin: -30px auto 40px;
+            max-width: 1100px;
+            padding: 50px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            position: relative;
+        }
+
+        /* Summary */
+        .summary {
+            font-size: 1.15rem;
+            line-height: 1.8;
+            color: var(--secondary);
+            margin-bottom: 60px;
+            padding: 30px;
+            background: var(--light-bg);
+            border-left: 5px solid var(--primary);
+        }
+
+        /* Section Styles */
+        section {
+            margin-bottom: 60px;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 30px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            padding-bottom: 15px;
+        }
+
+        h2:after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 60px;
+            height: 4px;
+            background: var(--primary);
+        }
+
+        /* Experience Cards */
+        .experience-item {
+            margin-bottom: 35px;
+            padding: 30px;
+            background: var(--background);
+            border: 2px solid var(--border);
+            border-left: 5px solid var(--primary);
+            transition: all 0.3s ease;
+        }
+
+        .experience-item:hover {
+            border-left-width: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+        }
+
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .job-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .job-title a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .job-title a:hover {
+            text-decoration: underline;
+        }
+
+        .job-period {
+            font-size: 0.95rem;
+            color: var(--accent);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .company-type {
+            color: var(--accent);
+            font-size: 1rem;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+
+        .job-description ul {
+            list-style: none;
+            margin: 15px 0;
+        }
+
+        .job-description li {
+            padding-left: 25px;
+            margin-bottom: 10px;
+            position: relative;
+            line-height: 1.7;
+        }
+
+        .job-description li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .tech-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .tech-tag {
+            background: var(--primary);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tech-tag:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        /* Skills Grid */
+        .skills-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        .skill-category {
+            padding: 25px;
+            background: var(--light-bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .skill-category h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 15px;
+        }
+
+        .skill-category ul {
+            list-style: none;
+        }
+
+        .skill-category li {
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .skill-category li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+
+        /* Projects */
+        .projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+
+        .project-card {
+            padding: 25px;
+            background: var(--light-bg);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .project-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-5px);
+        }
+
+        .project-card h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 10px;
+        }
+
+        .project-card p {
+            color: var(--secondary);
+            line-height: 1.6;
+        }
+
+        .project-card a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 10px;
+        }
+
+        /* Education & Other Info */
+        .info-box {
+            padding: 25px;
+            background: var(--light-bg);
+            border-left: 5px solid var(--primary);
+            margin-bottom: 20px;
+        }
+
+        .info-box h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .info-box p {
+            color: var(--secondary);
+            margin: 5px 0;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--primary);
+            color: white;
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: white;
+            font-size: 1.8rem;
+            transition: opacity 0.3s;
+        }
+
+        .footer-links a:hover {
+            opacity: 0.7;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header-content h1 {
+                font-size: 2rem;
+            }
+
+            .header-content .tagline {
+                font-size: 1.1rem;
+            }
+
+            main {
+                padding: 30px 20px;
+                margin: -20px 20px 20px;
+            }
+
+            .job-header {
+                flex-direction: column;
+            }
+
+            h2 {
+                font-size: 1.5rem;
+            }
+
+            .skills-grid,
+            .projects-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+            }
+            
+            main {
+                box-shadow: none;
+                margin: 0;
+            }
+
+            .experience-item {
+                page-break-inside: avoid;
+            }
+
+            footer {
+                display: none;
+            }
+        }
+
+        /* CTA Button */
+        .cta-button {
+            display: inline-block;
+            background: var(--primary);
+            color: white;
+            padding: 15px 40px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin: 20px 0;
+            transition: all 0.3s;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+    </style>
 </head>
-
 <body>
-	<!-- DEMO ONLY -->
-	<div class="main-wrapper">
-		<div class="container px-3 px-lg-5">
-			<article class="resume-wrapper mx-auto theme-bg-light p-5 mb-5 my-5 shadow-lg">
+    <!-- Header -->
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <h1>Abdulmateen Tairu</h1>
+                <p class="tagline">Software Engineer | Backend | Data Engineer</p>
+                <div class="header-links">
+                    <a href="https://github.com/Taycode" target="_blank"><i class="fab fa-github"></i> GitHub</a>
+                    <a href="https://www.linkedin.com/in/abdulmateen-tairu/" target="_blank"><i class="fab fa-linkedin"></i> LinkedIn</a>
+                    <a href="https://twitter.com/TayCode" target="_blank"><i class="fab fa-twitter"></i> Twitter</a>
+                </div>
+            </div>
+        </div>
+    </header>
 
-				<div class="resume-header">
-					<div class="row align-items-center">
-						<div class="resume-title col-12 col-md-6 col-lg-8 col-xl-9">
-							<h2 class="resume-name mb-0 text-uppercase" style="font-size: 26px">Abdulmateen Tairu</h2>
-							<div class="resume-tagline mb-3 mb-md-0">< Software Engineer /> </div>
-						</div><!--//resume-title-->
-						<div class="resume-contact col-12 col-md-6 col-lg-4 col-xl-3">
-							<ul class="list-unstyled mb-0">
-								<li class="mb-2"><i class="fas fa-envelope-square fa-fw fa-lg mr-2"></i><a class="resume-link" href="mailto:abdulmateentairu@gmail.com">abdulmateentairu@gmail.com</a></li>
-								<li class="mb-0"><i class="fas fa-map-marker-alt fa-fw fa-lg mr-2"></i>Nigeria</li>
-							</ul>
-						</div><!--//resume-contact-->
-					</div><!--//row-->
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Summary -->
+        <div class="summary">
+            Software Engineer with <strong>7 years of experience</strong> designing and delivering scalable backend systems and automation solutions across fintech, advertising, and logistics. Proven track record in building ETL pipelines, AI-enabled workflows, and distributed applications that handle thousands of daily operations. Passionate about leveraging machine learning and AI to optimize business processes and drive innovation.
+        </div>
 
-				</div><!--//resume-header-->
-				<hr>
-				<div class="resume-intro py-3">
-					<div class="media flex-column flex-md-row align-items-center">
-						<img class="resume-profile-image mb-3 mb-md-0 mr-md-5 ml-md-0 rounded mx-auto" src="assets/images/resume-profile.png" alt="image">
-						<div class="media-body text-left">
-							<p class="mb-0">
-								A software engineer skilled with building server side applications and data pipelines using Python and NodeJS. Fancies building solutions that
-								involve using real world data to solve real world problems
-							</p>
-						</div><!--//media-body-->
-					</div>
-				</div><!--//resume-intro-->
-				<hr>
-				<div class="resume-body">
-					<div class="row">
-						<div class="resume-main col-12 col-lg-8 col-xl-9 pr-0 pr-lg-5">
-							<section class="work-section py-3">
-								<h3 class="text-uppercase resume-section-heading mb-4">Work Experiences</h3>
-								<div class="item mb-3 mt-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">Software Engineer - Sando Tech Limited</h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right">February 2021 - Present</div>
-									</div>
-									<p class="mb-3" style="font-size: 15px">Fintech Company <br /> </p>
-									<div class="item-content">
-										<ul>
-											<li>Contributed to the development of a distributed system of microservices which handles hundreds of
-												thousands of financial transactions monthly. </li>
-											<li>Developed a notification service which handles thousands of notifications being sent to users monthly
-												over sms and emails.</li>
-											<li>Integrated socket servers and clients which serves as a means of communication between services.</li>
-										</ul>
-										<strong>Technologies Used:</strong>
-										<ul class="list-inline">
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Python</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Flask</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">NodeJs</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">ExpressJs</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">MongoDB</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Socket.io</span> </li>
-										</ul>
-									</div>
-									<hr>
-								</div><!--//item-->
-								<div class="item mb-3 mt-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">Software Engineer - Hiring.io</h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right">September 2020 - April 2021</div>
-									</div>
-									<p class="mb-3" style="font-size: 15px">Job Matching Platform <br /> </p>
-									<div class="item-content">
-										<ul>
-											<li>Integrated Elasticsearch to develop a searching system for searching for users on the platform. </li>
-											<li>Developed Rest API Endpoints for a job matching platform using Django and Django Rest Framework.</li>
-											<li>Gathered job data from the internet with scrapers built with scrapy and selenium.</li>
-										</ul>
-										<strong>Technologies Used:</strong>
-										<ul class="list-inline">
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Python</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Django</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Elasticsearch</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Selenium</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Scrapy</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">AWS EC2</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Postgres</span> </li>
-										</ul>
-									</div>
-									<hr>
-								</div><!--//item-->
-								<div class="item mb-3 mt-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">Backend Engineer (Contract) - <a href="https://sellaf.africa/">Sellaf.Africa</a> </h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right">May 2020 - November 2020</div>
-									</div>
-									<p class="mb-3" style="font-size: 15px">Affiliate Market <br /> </p>
-									<div class="item-content">
-										<ul>
-											<li>Built Rest API endpoints for an Affiliate marketing platform Sellaf using Python and Django.</li>
-											<li>Built a wrapper for flutterwave Rave API to receive payment by bank and card.</li>
-											<li>Deployed application on heroku.</li>
-										</ul>
-										<strong>Technologies Used:</strong>
-										<ul class="list-inline">
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Python</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Django</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Heroku</span> </li>
-										</ul>
-									</div>
-									<hr>
-								</div><!--//item-->
-								<div class="item mb-3 mt-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">Software Engineer - Neohaul Technologies </h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right">February 2020 - September 2020</div>
-									</div>
-									<p class="mb-3" style="font-size: 15px">Haulage and Logistics Company <br /> </p>
-									<div class="item-content">
-										<ul>
-											<li>Developed Rest API endpoints for an haulage and logistics platform <a href="https://www.broka.ng/">Broka</a> using NodeJS and ExpressJS</li>
-											<li>Designed the system architecture for a haulage and logistics platform.</li>
-											<li>Developed Cloud Functions for background tasks.</li>
-										</ul>
-										<strong>Technologies Used:</strong>
-										<ul class="list-inline">
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">NodeJs</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">ExpressJs</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Google Cloud Functions</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Firestore</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Heroku</span> </li>
-										</ul>
-									</div>
-									<hr>
-								</div><!--//item-->
-								<div class="item mb-3 mt-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">Data Engineer Intern - Terragon Group </h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right">September 2019 - April 2020</div>
-									</div>
-									<p class="mb-3" style="font-size: 15px">Data, Marketing and Technology <br /> </p>
-									<div class="item-content">
-										<ul>
-											<li>Developed several data pipelines for tracking user web activities using AWS Comprehend and Google
-												Content Classification</li>
-										</ul>
-										<strong>Technologies Used:</strong>
-										<ul class="list-inline">
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Python</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Sanic</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Kafka</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">RabbitMQ</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">AWS Comprehend</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Elasticsearch</span> </li>
-										</ul>
-									</div>
-									<hr>
-								</div><!--//item-->
+        <!-- Work Experience -->
+        <section id="experience">
+            <h2>Work Experience</h2>
 
-							</section><!--//work-section-->
-							<section class="work-section py-3">
-								<h3 class="text-uppercase resume-section-heading mb-4">Leadership / Volunteer Experience</h3>
-								<div class="item mb-3 mt-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">Lead - Google Developer Student Club, OAU</h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right">August 2020 - July 2021</div>
-									</div>
-									<p class="mb-3" style="font-size: 15px">Developer Community <br /> </p>
-									<div class="item-content">
-										<ul>
-											<li>Organized virtual events to educate members about software development. </li>
-											<li>Collaborated with Datacamp to offer 100+ students with 12months Datacamp free subscription.</li>
-										</ul>
-									</div>
-									<hr>
-								</div><!--//item-->
-								<div class="item mb-3 mt-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">Vice-chair Computer Society - IEEE OAU</h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right">April 2019 - February 2020</div>
-									</div>
-									<p class="mb-3" style="font-size: 15px">Tech Community <br /> </p>
-									<div class="item-content">
-										<ul>
-											<li>Tutored girls on building web applications using Flask and Python </li>
-											<li>Collaborated with other IEEE OAU executives in organizing several boot camps on campus</li>
-										</ul>
-									</div>
-									<hr>
-								</div><!--//item-->
+            <!-- Invisible Technologies -->
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title">Software Engineer (Automation) - <a href="https://www.invisible.co/" target="_blank">Invisible Technologies</a></div>
+                        <div class="company-type">Business Consulting | New York, USA (Remote)</div>
+                    </div>
+                    <div class="job-period">Mar 2023 - Aug 2025</div>
+                </div>
+                <div class="job-description">
+                    <ul>
+                        <li>Designed and built "LLM as a Step" automation, integrating multiple LLM models into 100+ client workflows (10K+ weekly requests), reducing average handling time by 80% and QA costs by 93%</li>
+                        <li>Contributed to a monorepo of backend and frontend applications built in Django, FastAPI, Next.js and Express.js, communicating over GraphQL, tRPC, REST and Kafka</li>
+                        <li>Designed and developed a fullstack application in FastAPI and Next.js to ingest and vectorize candidate resumes (via OpenAI embeddings) and store embeddings in Pinecone for a search engine for talents</li>
+                        <li>Built RLHF pipeline using Django, Next.js, and GraphQL, integrating Gemini, GPT, and Anthropic models to improve training quality and cut operating costs</li>
+                        <li>Developed full-stack solutions and ETL pipelines to support AI-enablement workflows, processing 100K+ requests daily with 99% success</li>
+                        <li>Monitored backend system performance with Datadog; proactively identified and fixed issues related to traffic surges, concurrency bugs, and legacy regressions</li>
+                    </ul>
+                    <div class="tech-tags">
+                        <span class="tech-tag">Python</span>
+                        <span class="tech-tag">Django</span>
+                        <span class="tech-tag">FastAPI</span>
+                        <span class="tech-tag">TypeScript</span>
+                        <span class="tech-tag">Next.js</span>
+                        <span class="tech-tag">GraphQL</span>
+                        <span class="tech-tag">Kafka</span>
+                        <span class="tech-tag">OpenAI</span>
+                        <span class="tech-tag">Pinecone</span>
+                        <span class="tech-tag">Datadog</span>
+                    </div>
+                </div>
+            </div>
 
-							</section><!--//leadership-section-->
+            <!-- Insomnia Labs -->
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title">Senior Backend Engineer - <a href="https://www.insomnialabs.io/" target="_blank">Insomnia Labs</a></div>
+                        <div class="company-type">Web3 & Blockchain | USA (Contract)</div>
+                    </div>
+                    <div class="job-period">Mar 2025 - Jul 2025</div>
+                </div>
+                <div class="job-description">
+                    <ul>
+                        <li>Built a real-time blockchain event indexer to capture and process smart-contract events using EtherJS, NestJS and PostgreSQL</li>
+                        <li>Developed scalable backend integrations (Stripe, custom APIs) to support admin dashboards and mobile features aligned to client requirements</li>
+                        <li>Monitored system health and performance using Grafana, ensuring service reliability and identifying bottlenecks in production environments</li>
+                    </ul>
+                    <div class="tech-tags">
+                        <span class="tech-tag">TypeScript</span>
+                        <span class="tech-tag">NestJS</span>
+                        <span class="tech-tag">EtherJS</span>
+                        <span class="tech-tag">PostgreSQL</span>
+                        <span class="tech-tag">Stripe</span>
+                        <span class="tech-tag">Grafana</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mystash Lead Engineer -->
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title">Lead Engineer, Admin & SaveChecks Team - <a href="https://www.mystash.ng/" target="_blank">Mystash</a></div>
+                        <div class="company-type">FinTech | Lagos, Nigeria (Remote)</div>
+                    </div>
+                    <div class="job-period">Sep 2022 - Dec 2022</div>
+                </div>
+                <div class="job-description">
+                    <ul>
+                        <li>Led development of SaveChecks, a key revenue-generating feature contributing to the company's $2M acquisition</li>
+                        <li>Optimized backend services for automated savings reducing average processing time by 40%, handling over ₦1B in transactions</li>
+                        <li>Provided technical leadership, defined KPIs, and enhanced code quality through reviews</li>
+                    </ul>
+                    <div class="tech-tags">
+                        <span class="tech-tag">Python</span>
+                        <span class="tech-tag">FastAPI</span>
+                        <span class="tech-tag">TypeScript</span>
+                        <span class="tech-tag">NestJS</span>
+                        <span class="tech-tag">PostgreSQL</span>
+                    </div>
+                </div>
+            </div>
+
+			            <!-- Mystash Software Engineer -->
+						<div class="experience-item">
+							<div class="job-header">
+								<div>
+									<div class="job-title">Software Engineer - <a href="https://www.mystash.ng/" target="_blank">Mystash</a></div>
+									<div class="company-type">FinTech | Lagos, Nigeria (Remote)</div>
+								</div>
+								<div class="job-period">Sep 2021 - Aug 2022</div>
+							</div>
+							<div class="job-description">
+								<ul>
+									<li>Migrated legacy backend to a scalable architecture, enabling growth to 30K+ users and over ₦1B in transactions</li>
+									<li>Built ETL pipelines processing thousands of bank transaction alerts daily using FastAPI and NestJS</li>
+									<li>Reduced transaction failures by 30% with improved error-handling and retry mechanisms</li>
+									<li>Refactored payment flow, eliminating race conditions and double crediting issues, boosting payment resolution to 99.8%</li>
+									<li>Set up CI/CD streamlining release cycles and boosting team efficiency</li>
+								</ul>
+								<div class="tech-tags">
+									<span class="tech-tag">Python</span>
+									<span class="tech-tag">FastAPI</span>
+									<span class="tech-tag">TypeScript</span>
+									<span class="tech-tag">NestJS</span>
+									<span class="tech-tag">PostgreSQL</span>
+								</div>
+							</div>
+						</div>
+
+            <!-- Bunny Studio -->
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title">Full-stack Software Engineer - Bunny Studio</div>
+                        <div class="company-type">Advertising | San Francisco, USA (Remote)</div>
+                    </div>
+                    <div class="job-period">Jun 2022 - Dec 2022</div>
+                </div>
+                <div class="job-description">
+                    <ul>
+                        <li>Maintained a distributed backend system of Python, TypeScript and PHP applications</li>
+                        <li>Managed multiple frontend applications built in React, Next.js and Angular</li>
+                        <li>Refactored a legacy codebase into a modern microservice, delivering faster performance and seamless scalability</li>
+                        <li>Developed an ETL process creating personal workspaces for over 100K users, improving team collaboration and project management</li>
+                    </ul>
+                    <div class="tech-tags">
+                        <span class="tech-tag">Python</span>
+                        <span class="tech-tag">TypeScript</span>
+                        <span class="tech-tag">PHP</span>
+                        <span class="tech-tag">React</span>
+                        <span class="tech-tag">Next.js</span>
+                        <span class="tech-tag">Angular</span>
+                    </div>
+                </div>
+            </div>
 
 
-							<section class="project-section py-3">
-								<h3 class="text-uppercase resume-section-heading mb-4">Projects</h3>
-								<div class="item mb-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">Jumga</h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right"><a href="https://github.com/Taycode/jumga">Link to project</a></div>
 
-									</div>
-									<div class="item-content">
-										<p>
-											An e-commerce project built using a distributed system of microservices. Technologies used are
-											NodeJS (ExpressJS), Docker and Docker Compose.
-										</p>
-										<strong>Technologies Used:</strong>
-										<ul class="list-inline">
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Python</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Django </span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Docker-compose</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Docker</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Postgres</span> </li>
-										</ul>
+            <!-- IKONIK -->
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title">Software Engineer - IKONIK</div>
+                        <div class="company-type">Financial Service | Lagos, Nigeria (Remote)</div>
+                    </div>
+                    <div class="job-period">Feb 2021 - Oct 2021</div>
+                </div>
+                <div class="job-description">
+                    <ul>
+                        <li>Built and maintained backend systems of Flask and Express.js applications for a fintech solution, processing over ₦500 million monthly</li>
+                        <li>Developed an event-based notification system using websockets and REST APIs to enhance real-time communication</li>
+                        <li>Automated payment issue resolution for businesses, improving transaction resolution speed</li>
+                        <li>Developed API clients for SOAP and REST third-party integrations</li>
+                    </ul>
+                    <div class="tech-tags">
+                        <span class="tech-tag">Python</span>
+                        <span class="tech-tag">Flask</span>
+                        <span class="tech-tag">Express.js</span>
+                        <span class="tech-tag">WebSockets</span>
+                    </div>
+                </div>
+            </div>
 
-									</div>
-									<hr />
-								</div><!--//item-->
-								<div class="item mb-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">TayMall</h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right"><a href="https://github.com/Taycode/tay-mall">Link to project</a></div>
+            <!-- HiringIO -->
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title">Software Engineer - HiringIO</div>
+                        <div class="company-type">IT Consulting | Bengaluru, India (Remote)</div>
+                    </div>
+                    <div class="job-period">Sep 2020 - Feb 2021</div>
+                </div>
+                <div class="job-description">
+                    <ul>
+                        <li>Developed the backend for a job matching platform using Django</li>
+                        <li>Integrated Elasticsearch to enhance the search system's performance</li>
+                    </ul>
+                    <div class="tech-tags">
+                        <span class="tech-tag">Python</span>
+                        <span class="tech-tag">Django</span>
+                        <span class="tech-tag">Elasticsearch</span>
+                        <span class="tech-tag">PostgreSQL</span>
+                    </div>
+                </div>
+            </div>
 
-									</div>
-									<div class="item-content">
-										<p>
-											An E-commerce API built using a distributed system architecture. Technologies used are
-											NodeJS (ExpressJS), Docker, Docker Compose and RabbitMQ.
-										</p>
-										<strong>Technologies Used:</strong>
-										<ul class="list-inline">
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">NodeJs</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">ExpressJs</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Docker</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Docker-compose</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">MongoDB</span> </li>
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">RabbitMQ</span> </li>
-										</ul>
+            <!-- Neohaul -->
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title">Software Engineer - Neohaul Technologies</div>
+                        <div class="company-type">Logistics | Lagos, Nigeria</div>
+                    </div>
+                    <div class="job-period">Feb 2020 - Oct 2020</div>
+                </div>
+                <div class="job-description">
+                    <ul>
+                        <li>Developed backend systems providing real-time insights into logistics and cargo shipping services</li>
+                        <li>Created cloud functions for background tasks using Firebase Cloud Functions, ensuring seamless operations</li>
+                    </ul>
+                    <div class="tech-tags">
+                        <span class="tech-tag">Node.js</span>
+                        <span class="tech-tag">Express.js</span>
+                        <span class="tech-tag">Firebase</span>
+                        <span class="tech-tag">Firestore</span>
+                    </div>
+                </div>
+            </div>
 
-									</div>
-									<hr/>
-								</div><!--//item-->
+            <!-- Terragon -->
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title">Data Engineer - Terragon Group</div>
+                        <div class="company-type">Marketing Technology | Lagos, Nigeria</div>
+                    </div>
+                    <div class="job-period">Sep 2019 - Mar 2020</div>
+                </div>
+                <div class="job-description">
+                    <ul>
+                        <li>Managed real-time data pipelines for tracking and analyzing web activities of thousands of users, built with microservices using Python, Node.js, Kafka, and RabbitMQ</li>
+                    </ul>
+                    <div class="tech-tags">
+                        <span class="tech-tag">Python</span>
+                        <span class="tech-tag">Node.js</span>
+                        <span class="tech-tag">Kafka</span>
+                        <span class="tech-tag">RabbitMQ</span>
+                        <span class="tech-tag">Microservices</span>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-								<div class="item mb-3">
-									<div class="item-heading row align-items-center mb-2">
-										<h4 class="item-title col-12 col-md-6 col-lg-8 mb-2 mb-md-0">TayFlutterwave</h4>
-										<div class="item-meta col-12 col-md-6 col-lg-4 text-muted text-left text-md-right"><a href="https://github.com/Taycode/tayflutterwave">Link to project</a></div>
+        <!-- Speaking -->
+        <section id="speaking">
+            <h2>Speaking & Talks</h2>
+            <div class="experience-item">
+                <div class="job-header">
+                    <div>
+                        <div class="job-title"><a href="slides.html" target="_blank">Servers Get Stressed Too</a></div>
+                        <div class="company-type">PyCon Africa 2025</div>
+                    </div>
+                </div>
+                <div class="job-description">
+                    <p>A talk on 7 subtle anti-patterns that stress backend systems and how to fix them. Covers N+1 queries, pagination strategies, hot-path aggregations, database search optimization, and more.</p>
+                </div>
+            </div>
+        </section>
 
-									</div>
-									<div class="item-content">
-										<p>
-											A Flutterwave library for python.
-										</p>
-										<strong>Technologies Used:</strong>
-										<ul class="list-inline">
-											<li class="list-inline-item"><span class="badge badge-primary badge-pill">Python</span> </li>
-										</ul>
+        <!-- Skills -->
+        <section id="skills">
+            <h2>Skills & Technologies</h2>
+            <div class="skills-grid">
+                <div class="skill-category">
+                    <h3>Programming & Frameworks</h3>
+                    <ul>
+                        <li>Python (FastAPI, Django, Flask)</li>
+                        <li>TypeScript (NestJS, Express)</li>
+                        <li>JavaScript / Node.js</li>
+                    </ul>
+                </div>
+                <div class="skill-category">
+                    <h3>AI & Machine Learning</h3>
+                    <ul>
+                        <li>OpenAI, Gemini, Anthropic</li>
+                        <li>LangChain</li>
+                        <li>Vector Databases (Pinecone)</li>
+                        <li>RLHF Pipelines</li>
+                    </ul>
+                </div>
+                <div class="skill-category">
+                    <h3>Data & Messaging</h3>
+                    <ul>
+                        <li>PostgreSQL, MongoDB, Redis</li>
+                        <li>Snowflake, Elasticsearch</li>
+                        <li>Kafka, RabbitMQ</li>
+                        <li>ETL Pipelines, Airflow</li>
+                    </ul>
+                </div>
+                <div class="skill-category">
+                    <h3>Cloud & DevOps</h3>
+                    <ul>
+                        <li>AWS (Lambda, CloudWatch)</li>
+                        <li>GCP, Firebase</li>
+                        <li>Docker, Kubernetes</li>
+                        <li>CI/CD, GitHub Actions</li>
+                    </ul>
+                </div>
+                <div class="skill-category">
+                    <h3>APIs & Integration</h3>
+                    <ul>
+                        <li>GraphQL, tRPC, REST</li>
+                        <li>WebSockets</li>
+                        <li>EtherJS (Blockchain)</li>
+                        <li>Stripe Integration</li>
+                    </ul>
+                </div>
+                <div class="skill-category">
+                    <h3>Monitoring & Tools</h3>
+                    <ul>
+                        <li>Datadog, Grafana</li>
+                        <li>Sentry</li>
+                        <li>Performance Optimization</li>
+                        <li>System Architecture</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
 
-									</div>
+        <!-- Projects -->
+        <section id="projects">
+            <h2>Projects & Open Source</h2>
+            <div class="projects-grid">
+                <div class="project-card">
+                    <h3>Haya</h3>
+                    <p>A talent matching platform helping startups find talents to hire.</p>
+                </div>
+                <div class="project-card">
+                    <h3>Bull-board Contributor</h3>
+                    <p>Contributed to an open-source UI tool for Bull or BullMQ, enhancing job queue management and visualization.</p>
+                    <a href="https://github.com/felixmosh/bull-board" target="_blank">View Project →</a>
+                </div>
+                <div class="project-card">
+                    <h3>Jumga</h3>
+                    <p>An e-commerce project built using a distributed system of microservices with Python, Django, Docker and Docker Compose.</p>
+                    <a href="https://github.com/Taycode/jumga" target="_blank">View Project →</a>
+                </div>
+                <div class="project-card">
+                    <h3>TayFlutterwave</h3>
+                    <p>A Python library for integrating Flutterwave payment APIs.</p>
+                    <a href="https://github.com/Taycode/tayflutterwave" target="_blank">View Project →</a>
+                </div>
+            </div>
+        </section>
 
-								</div><!--//item-->
+        <!-- Education -->
+        <section id="education">
+            <h2>Education</h2>
+            <div class="info-box">
+                <h3>Bachelor of Science - Computer Science with Mathematics</h3>
+                <p><strong>Obafemi Awolowo University</strong></p>
+                <p>Ile-Ife, Osun, Nigeria</p>
+            </div>
+        </section>
 
+        <!-- CTA -->
+        <div style="text-align: center; margin: 60px 0;">
+            <h2 style="margin-bottom: 20px;">Currently Open to New Opportunities</h2>
+            <p style="font-size: 1.1rem; margin-bottom: 30px;">Looking for backend engineering or technical leadership roles</p>
+            <a href="https://www.linkedin.com/in/abdulmateen-tairu/" target="_blank" class="cta-button">Connect on LinkedIn</a>
+        </div>
+    </main>
 
-							</section><!--//project-section-->
-						</div><!--//resume-main-->
-						<aside class="resume-aside col-12 col-lg-4 col-xl-3 px-lg-4 pb-lg-4">
-							<section class="skills-section py-3">
-								<h3 class="text-uppercase resume-section-heading mb-4">Skills</h3>
-								<div class="item">
-									<h4 class="item-title">Technical</h4>
-									<ul class="list-unstyled resume-skills-list">
-										<li class="mb-2"><strong>Core:</strong> NodeJS (ExpressJS) | Python (Django, Flask and FastAPI) </li>
-										<li class="mb-2"><strong>Queues, messaging, caching and background tasks:</strong> Kafka | Redis | RabbitMQ | Celery <li>
-											<li class="mb-2"><strong>Web scraping and automation:</strong> Selenium | Scrapy </li>
-										<li class="mb-2"><strong>Database: </strong> Postgres | MongoDb | Firestore (Firebase) </li>
-											<li class="mb-2"><strong>Other Tools:</strong> Docker | Elasticsearch | Google Cloud Functions | Socket.io</li>
-											<li class="mb-2"><strong>Logging:</strong> Sentry</li>
-										</ul>
-									</div><!--//item-->
-									<div class="item">
-										<h4 class="item-title">Professional</h4>
-										<ul class="list-unstyled resume-skills-list">
-											<li class="mb-2">Effective communication</li>
-											<li class="mb-2">Team player<li>
-												<li class="mb-2">Strong problem solver</li>
-												<li>Great Leadership</li>
-											</ul>
-										</div><!--//item-->
-									</section><!--//skills-section-->
-									<section class="education-section py-3">
-										<h3 class="text-uppercase resume-section-heading mb-4">Education</h3>
-										<ul class="list-unstyled resume-education-list">
-											<li class="mb-3">
-												<div class="resume-degree font-weight-bold">BSc in Computer Science</div>
-												<div class="resume-degree-org text-muted">Obafemi Awolowo University</div>
-												<div class="resume-degree-time text-muted">2018 - 2023</div>
-											</li>
-										</ul>
-									</section><!--//education-section-->
-
-									<section class="skills-section py-3">
-										<h3 class="text-uppercase resume-section-heading mb-4">Languages</h3>
-										<ul class="list-unstyled resume-lang-list">
-											<li class="mb-2">English <span class="text-muted">(Native)</span></li>
-											<li>Yoruba <span class="text-muted">(Professional)</span></li>
-										</ul>
-									</section><!--//certificates-section-->
-									<section class="skills-section py-3">
-										<h3 class="text-uppercase resume-section-heading mb-4">Interests</h3>
-										<ul class="list-unstyled resume-interests-list mb-0">
-											<li class="mb-2">Music</li>
-											<li class="mb-2">Football</li>
-											<li class="mb-2">Body Building</li>
-											<li>Cooking</li>
-										</ul>
-									</section><!--//certificates-section-->
-
-								</aside><!--//resume-aside-->
-							</div><!--//row-->
-						</div><!--//resume-body-->
-						<hr>
-						<div class="resume-footer text-center">
-							<ul class="resume-social-list list-inline mx-auto mb-0 d-inline-block text-muted">
-								<li class="list-inline-item mb-lg-0 mr-3"><a class="resume-link" href="https://github.com/Taycode"><i class="fab fa-github-square fa-2x mr-2" data-fa-transform="down-4"></i><span class="d-none d-lg-inline-block text-muted">github.com/TayCode</span></a></li>
-								<li class="list-inline-item mb-lg-0 mr-3"><a class="resume-link" href="https://www.linkedin.com/in/abdulmateen-tairu/"><i class="fab fa-linkedin fa-2x mr-2" data-fa-transform="down-4"></i><span class="d-none d-lg-inline-block text-muted">linkedin.com/in/abdul...</span></a></li>
-								<li class="list-inline-item mb-lg-0 mr-lg-3"><a class="resume-link" href="https://twitter.com/TayCode"><i class="fab fa-twitter-square fa-2x mr-2" data-fa-transform="down-4"></i><span class="d-none d-lg-inline-block text-muted">@TayCode</span></a></li>
-							</ul>
-						</div><!--//resume-footer-->
-					</article>
-
-				</div><!--//container-->
-
-				<footer class="footer text-center py-4">
-					<!--/* This template is free as long as you keep the footer attribution link. If you'd like to use the template without the attribution link, you can buy the commercial license via our website: themes.3rdwavemedia.com Thank you for your support. :) */-->
-					<small class="copyright text-muted">Designed with <i class="fas fa-heart"></i> by <a class="theme-link" href="http://themes.3rdwavemedia.com" target="_blank">Xiaoying Riley</a> for developers</small>
-				</footer>
-
-			</div><!--//main-wrapper-->
-
-
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="footer-links">
+                <a href="https://github.com/Taycode" target="_blank" title="GitHub"><i class="fab fa-github"></i></a>
+                <a href="https://www.linkedin.com/in/abdulmateen-tairu/" target="_blank" title="LinkedIn"><i class="fab fa-linkedin"></i></a>
+                <a href="https://twitter.com/TayCode" target="_blank" title="Twitter"><i class="fab fa-twitter"></i></a>
+            </div>
+            <p>&copy; 2025 Abdulmateen Tairu. All rights reserved.</p>
+        </div>
+    </footer>
 </body>
 </html>
-
