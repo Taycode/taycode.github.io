@@ -533,6 +533,31 @@ def process_mandate(self, mandate_id, run_date):
 </section>
 
 <section>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">Why it matters</span></p>
+    <h2>What a second run actually costs</h2>
+    <pre><code class="language-text">   THE OPERATION                      RUN IT TWICE
+   ─────────────────────────────────────────────────────────
+   SET status = 'paid'                nothing changes
+   balance = balance - 4,200          debited twice
+   send_sms("₦4,200 debited")         told twice
+   INSERT INTO payouts (...)          paid twice</code></pre>
+    <p class="small">Only the first line is safe to repeat. It sets a value.
+       <strong>The rest apply a change</strong> — and a change applied twice is a different
+       number, a confused customer, or money out the door.</p>
+    <div class="note">
+        A payment provider sends <code>payment.succeeded</code>. The network blips and it
+        redelivers — which is documented behaviour, not a bug.
+        <strong>We credit the wallet twice, and we were paid once.</strong>
+        Nothing in our code was wrong. We just had no way to say
+        "I have already seen this one."
+    </div>
+    <aside class="notes"><p class="narration">This is the part worth being concrete about, because "runs twice" sounds harmless until you look at what the operation actually is. Setting a status to paid is safe to repeat — run it a hundred times and the row says paid. But almost nothing else is. Subtracting from a balance twice takes the money twice. Sending an SMS twice tells the customer twice. Inserting a payout row twice pays somebody twice. The difference is whether the operation sets a value or applies a change, and applying a change twice is always a different outcome. Here is the one that actually costs you: a payment provider sends payment dot succeeded, the network blips, and it redelivers the webhook — which is documented behaviour on every provider I have used, not a bug. Without protection you credit that wallet twice, and you were only ever paid once. Nothing in the code was wrong. We simply had no way of saying "I have already seen this one".</p>
+        <p class="cue">55s. Read the four rows, then land the provider story.
+        This is the emotional argument; the next slide is the mechanical one.
+        If someone asks for the real number: any wallet top-up flow has this shape.</p></aside>
+</section>
+
+<section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">The concept</span></p>
     <h2>Idempotency, and where the key comes from</h2>
     <p class="small"><em>Idempotent</em> — running it twice leaves the same result as once.</p>
@@ -548,8 +573,9 @@ key = f"{mandate_id}:{run_date}"       # same key every attempt</code></pre>
             <li>a fresh UUID</li><li>the hostname or retry count</li></ul></div>
     </div>
     <div class="note">
-        Free: <code>SET balance = 5000</code>, upsert, delete by id.
-        Never free: <code>balance = balance + 500</code>, append, send, charge.
+        Where you can, rewrite the work so it <strong>sets a value</strong> instead of
+        applying a change — an upsert, a delete by id, <code>SET status = 'paid'</code>.
+        Then the key stops being the only thing standing between you and a double charge.
     </div>
     <aside class="notes"><p class="narration">Idempotent means running something twice leaves the same result as running it once. The part people get wrong is the key. If you generate a fresh UUID on each attempt, every retry looks like new work and the index never fires. The key has to be derived from the work itself — the mandate and the date, the order id, or the message id a webhook provider hands you for free. Anything containing a timestamp, a hostname or a retry count is not a key, it is a serial number.</p>
         <p class="cue">60s. Webhooks hand you a free key — the provider's message id. Most immediately
