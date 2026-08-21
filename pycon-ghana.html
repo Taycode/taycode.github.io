@@ -426,9 +426,63 @@ def process_mandate(self, mandate_id):
         65s. Be precise — do NOT claim queues duplicate constantly, because they don't,
         and someone in the room knows it. The argument is rarity vs. consequence:
         rare is fine for a thumbnail cache, and not fine for a debit.
-        A distributed lock narrows the window but doesn't close it — if the holder stalls
-        past the TTL, the lock expires while the work is still running. Say this out loud
-        here; it sets up the next slide.
+        Next slide covers what people reach for to prevent it.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">What people try first</span></p>
+    <h2>Three ways to stop two runners colliding</h2>
+    <p class="small"><strong>Pessimistic</strong> — assume a collision. Take a lock, make
+       everyone else wait.</p>
+    <pre><code class="language-python">with redis.lock("cron:mandates", timeout=3600):   # across machines
+    process_mandates()
+# or, within one database:  SELECT ... FROM mandates WHERE id = 42 FOR UPDATE</code></pre>
+    <p class="small"><strong>Optimistic</strong> — assume no collision. Check at the moment
+       you write.</p>
+    <pre><code class="language-sql">UPDATE mandates SET status = 'running', version = version + 1
+ WHERE id = 42 AND version = 7;        -- 0 rows updated = someone beat you</code></pre>
+    <p class="small"><strong>Partitioning</strong> — never let two nodes want the same row.
+       Hash the id onto a ring; each node only handles what it owns.</p>
+    <pre><code class="language-python">if ring.owner(mandate_id) == this_node:
+    process(mandate_id)</code></pre>
+    <aside class="notes">
+        75s. Define each in one line as you go — the room will have heard the words and
+        not necessarily used them.
+        Pessimistic: good when collisions are common, costs you waiting and deadlocks.
+        Optimistic: good when they're rare, costs you handling the loser's retry.
+        Consistent hashing: the ring means adding a node reshuffles a small slice of keys
+        instead of all of them. Same trick as sharding a cache.
+        Do NOT oversell any of them — the next slide is why none of them finish the job.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">Why that isn't enough</span></p>
+    <h2>All three narrow the window. None of them close it.</h2>
+    <table>
+        <tr><th>Approach</th><th>Where it still lets you down</th></tr>
+        <tr><td><strong>Distributed lock</strong></td>
+            <td>The holder stalls — a GC pause, a slow disk, a paused container — and the
+                TTL expires <em>while the work is still running</em>. Now there are two,
+                and neither knows.</td></tr>
+        <tr><td><strong>Optimistic locking</strong></td>
+            <td>Protects the row you version. It doesn't protect the debit you already
+                sent to the payment provider.</td></tr>
+        <tr><td><strong>Consistent hashing</strong></td>
+            <td>Ownership moves whenever a node joins or leaves. During that shuffle, two
+                nodes can both believe they own the same key.</td></tr>
+    </table>
+    <div class="note">
+        Every one of these makes a second run <strong>less likely</strong>.
+        None of them makes a second run <strong>safe</strong>.
+        That is a different problem, and it needs a different tool.
+    </div>
+    <aside class="notes">
+        60s. This is the hinge of the section. Land the last line and pause —
+        the next slide is the answer.
+        If asked "so are locks useless?" — no. Use them to avoid wasted work and
+        contention. Just don't use them as your correctness guarantee.
     </aside>
 </section>
 
@@ -483,34 +537,49 @@ key = f"{mandate_id}:{run_date}"       # same key every attempt</code></pre>
 
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">The situation</span></p>
-    <h2>Every worker calling the same third party</h2>
-    <pre><code class="language-text">  [ queue ] ──▶ worker ─┐
-            ──▶ worker ─┤
-            ──▶ worker ─┼──▶  content classification API
-            ──▶ worker ─┤     knowledge graph API
-            ──▶ worker ─┘     payment provider</code></pre>
-    <pre><code class="language-python">for attempt in range(5):
-    try:
-        return provider.call(payload)
-    except Exception:
-        time.sleep(1)          # every worker, in lockstep, every second</code></pre>
-    <p class="small muted">A URL enrichment pipeline: scrape a page, classify it, look up
-       entities. Every job hits somebody else's API.</p>
-    <aside class="notes">45s.</aside>
+    <h2>A pipeline that depends on somebody else's API</h2>
+    <p class="small">A web activity tracker. Users' apps send us a URL; a worker fetches the
+       page and asks a third-party service to classify what it's about. That classification
+       is the whole product — <strong>every single job has to make that call.</strong></p>
+    <pre><code class="language-text">   [ queue ]──▶ worker ─┐
+             ──▶ worker ─┤
+             ──▶ worker ─┼──▶  classification API   ← not ours
+             ──▶ worker ─┤       (one service,
+             ──▶ worker ─┘        rate limited)</code></pre>
+    <p class="small">Dozens of workers, and one dependency none of us control. It was fine
+       for months.</p>
+    <aside class="notes">
+        45s. Say plainly what the system does before anything goes wrong.
+        The point to plant: many workers, one shared dependency, no control over it.
+    </aside>
 </section>
 
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">What broke, and why</span></p>
-    <h2>We turned a wobble into an outage</h2>
-    <pre><code class="language-text">t+0s   provider slows down
-t+1s   every worker retries at once   ──▶ provider slows further
-t+2s   every worker retries at once   ──▶ provider starts erroring
-t+3s   every worker retries at once   ──▶ ...</code></pre>
-    <p>A fixed retry interval <strong>synchronises every client</strong>. You have built a
-       coordinated load test against a service that is already struggling.</p>
-    <p class="small muted">Meanwhile each worker sits blocked in <code>sleep</code>, so your
-       own queue backs up behind an outage you're helping to cause.</p>
-    <aside class="notes">50s. Name it: the thundering herd.</aside>
+    <h2>The API got slow, and we made it worse</h2>
+    <p class="small">One afternoon the classification service started responding slowly.
+       Not down — just slow. Our retry code looked like this:</p>
+    <pre><code class="language-python">for attempt in range(5):
+    try:
+        return classify(url)
+    except Exception:
+        time.sleep(1)          # wait exactly one second, then try again</code></pre>
+    <pre><code class="language-text">t+0s   the API slows down
+t+1s   every worker retries at the same instant  ──▶ more load, slower still
+t+2s   every worker retries at the same instant  ──▶ it starts returning errors
+t+3s   every worker retries at the same instant  ──▶ ...</code></pre>
+    <ul class="tight small">
+        <li>Every worker failed at roughly the same moment, waited the <strong>same fixed
+            second</strong>, and came back together — so we multiplied the load on a service
+            that was already struggling.</li>
+        <li>Meanwhile each worker sat blocked inside <code>sleep</code>, so
+            <strong>our own queue backed up</strong> behind an outage we were helping cause.</li>
+    </ul>
+    <aside class="notes">
+        60s. Name it once: the thundering herd.
+        The two bullets are the whole slide — we hurt them, and we hurt ourselves.
+        Emphasise "not down, just slow" — that's what makes retries feel reasonable.
+    </aside>
 </section>
 
 <section>
@@ -541,7 +610,8 @@ with jitter      │ █│▌ │ ▌█│  ▌│    spread across the window
    └──────success─────────┴───one probe──────┘</code></pre>
     <ul class="tight small">
         <li><strong>Circuit breaker.</strong> Once you know it's down, stop calling.
-            Fail immediately instead of burning a worker for 30 seconds.</li>
+            Fail immediately instead of burning a worker for 30 seconds —
+            <strong>or send the work to a different provider.</strong></li>
         <li><strong>Timeouts on every network call.</strong> <code>requests</code> defaults
             to <em>no timeout</em> — one hung socket holds a worker forever.</li>
         <li><strong>A separate queue per dependency.</strong> A backed-up SMS provider must
@@ -552,6 +622,54 @@ with jitter      │ █│▌ │ ▌█│  ▌│    spread across the window
         so a stuck provider couldn't take the core product down with it.
     </div>
     <aside class="notes">55s. End of §3 around 17:00.</aside>
+</section>
+
+<section>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">The concept</span></p>
+    <h2>An open circuit is a chance to go elsewhere</h2>
+    <p class="small">Failing fast is good. <strong>Failing over is better</strong> — if the
+       work can be done by somebody else.</p>
+    <pre><code class="language-python">class PaymentProvider(Protocol):
+    def charge(self, amount: int, ref: str) -> ChargeResult: ...
+
+def charge(amount, ref):
+    for provider in PROVIDERS:                  # primary, then fallback
+        if breaker.is_open(provider.name):
+            continue                            # known down — skip it
+        result = provider.charge(amount, ref)
+        record(ref, provider=provider.name, external_id=result.id)
+        return result
+    raise AllProvidersDown</code></pre>
+    <p class="small">This only works if you built for it <em>before</em> the outage.</p>
+    <aside class="notes">
+        55s. Very common in Nigerian fintech — more than one payment provider is normal,
+        not exotic. The room will recognise this immediately.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">The concept</span></p>
+    <h2>What failover demands of your code</h2>
+    <ol class="tight small">
+        <li><strong>One interface, many adapters.</strong> The caller must not know or care
+            which provider answered. The moment business logic says
+            <code>if provider == "x"</code>, failover has stopped being switchable.</li>
+        <li><strong>Normalise everything on the way back in.</strong> Same result shape, same
+            status names, same error categories. Two providers will not agree on what
+            "pending" means — that translation is your job, at the edge.</li>
+        <li><strong>Record who processed what.</strong> Store the provider name and
+            <em>their</em> reference id against the transaction.</li>
+    </ol>
+    <div class="note">
+        That last one is not bookkeeping. Reconciliation, refunds and disputes all go back
+        to the provider that actually moved the money — and the two of them have completely
+        different id spaces. <strong>Your idempotency key stays yours</strong>; theirs is
+        just something you store alongside it.
+    </div>
+    <aside class="notes">
+        60s. Point 3 links straight back to idempotency and to the ledger in the next
+        section. Say it: switching providers must never mean charging twice.
+    </aside>
 </section>
 
 <!-- ══════════ UNIT 5 · Atomicity · 6 slides ══════════ -->
@@ -616,24 +734,52 @@ ALTER TABLE accounts ADD CONSTRAINT bal_nonneg CHECK (balance >= 0);</code></pre
 
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
-    <h2>Stop storing a number you mutate</h2>
-    <pre><code class="language-sql">-- append only. never UPDATE.
-INSERT INTO ledger (account_id, amount, reason, idem_key)
+    <h2>The risky part is a balance you mutate</h2>
+    <p class="small"><code>balance = balance - amount</code> is a read-modify-write — the race
+       from the last slide, built into your schema. And it keeps <em>what</em> the balance is
+       while losing <em>how it got there</em>.</p>
+    <p class="small">One answer: make the entries the source of truth, and derive the number.</p>
+    <pre><code class="language-sql">INSERT INTO ledger (account_id, amount, reason, idem_key)
 VALUES (42, -4200, 'withdrawal', 'wd:918:2026-08-21');
 
 SELECT SUM(amount) FROM ledger WHERE account_id = 42;</code></pre>
     <ul class="tight small">
-        <li>No read-modify-write, so <strong>no lost updates</strong></li>
+        <li>Nothing is read-modify-written, so <strong>nothing is lost</strong></li>
         <li><code>idem_key</code> is unique, so <strong>replays are harmless</strong></li>
-        <li>You get an <strong>audit trail</strong> you didn't have to build separately</li>
+        <li>You get the <strong>audit trail</strong> for free</li>
     </ul>
+    <aside class="notes">
+        55s. Aside: a logistics app I worked on incremented and decremented counters on
+        every action — races everywhere, same cause.
+        Do NOT present this as a law. The next slide is the cost.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§4 Databases &middot; <span class="beat">The trade-off</span></p>
+    <h2>But summing it every time isn't free</h2>
+    <p class="small">Every read now scans every entry that account has ever had. At a few
+       hundred rows, fine. At a few million — on your hottest endpoint, on every page load —
+       that is a real cost, and "just derive it" stops being good advice.</p>
+    <p class="small">So most systems keep both: entries as the truth, a stored number for speed.</p>
+    <pre><code class="language-sql">BEGIN;
+  INSERT INTO ledger (account_id, amount, reason, idem_key) VALUES (...);
+  UPDATE accounts SET balance = balance + :amt WHERE id = 42;   -- same transaction
+COMMIT;
+
+-- or snapshot periodically, and read: snapshot + entries since
+INSERT INTO balance_snapshots (account_id, as_of_entry_id, balance) VALUES (...);</code></pre>
     <div class="note">
-        Same bug elsewhere: a logistics app incrementing and decrementing counters on
-        every action. Races everywhere. Same fix — stop storing the count, sum the events.
-        Reads cost more; snapshot periodically if that bites. That is caching an
-        aggregate, and you are trading staleness for latency <strong>on purpose</strong>.
+        The rule worth keeping isn't "never store it". It's:
+        <strong>store it if you need the speed — but make sure you can always recompute it
+        from the entries, and run something that checks the two still agree.</strong>
     </div>
-    <aside class="notes">60s.</aside>
+    <aside class="notes">
+        60s. This is the honest version. A precomputed balance is a cache, and it obeys
+        cache rules: it can drift, so it needs a reconciliation job.
+        Links forward to §5 — that reconciliation check is exactly the kind of invariant
+        worth alerting on.
+    </aside>
 </section>
 
 <section>
@@ -664,6 +810,37 @@ SELECT SUM(amount) FROM ledger WHERE account_id = 42;</code></pre>
     </aside>
 </section>
 
+<section>
+    <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
+    <h2>So who actually sends it?</h2>
+    <p class="small">The outbox row is just a row. Something has to pick it up — a
+       <strong>relay</strong>: a small worker doing one thing, on a loop.</p>
+    <pre><code class="language-sql">SELECT id, topic, payload FROM outbox
+ WHERE published_at IS NULL
+ ORDER BY id
+ LIMIT 100
+ FOR UPDATE SKIP LOCKED;      -- so several relays can run without fighting</code></pre>
+    <pre><code class="language-python">for row in batch:
+    broker.publish(row.topic, row.payload)     # publish first
+    mark_published(row.id)                     # then mark it done</code></pre>
+    <p class="small">Crash between those two lines and it publishes again — which is
+       <strong>at-least-once, and fine</strong>, because the consumer already has an
+       idempotency key.</p>
+    <div class="note">
+        <strong>Not a database trigger.</strong> A trigger runs inside your transaction and
+        can't safely make a network call — you'd be holding a lock open across the broker.
+        At larger scale, swap polling for change data capture: Debezium tails Postgres'
+        replication log and publishes for you. Lower latency, more moving parts.
+    </div>
+    <aside class="notes">
+        70s. This is the slide people actually need — everyone says "outbox" and nobody
+        shows the relay.
+        Order matters: publish THEN mark. The other way round loses events instead of
+        duplicating them, and duplicates are the failure you already handle.
+        SKIP LOCKED callback to the tool table earlier.
+    </aside>
+</section>
+
 <!-- ══════════ UNIT 6 · Batching & pagination · 4 slides ══════════ -->
 
 <section>
@@ -678,21 +855,56 @@ SELECT SUM(amount) FROM ledger WHERE account_id = 42;</code></pre>
 </section>
 
 <section>
-    <p class="kicker">§4 Databases &middot; <span class="beat">Why we couldn't just run it</span></p>
-    <h2>Two ways the obvious approach fails</h2>
-    <p class="small"><strong>1. One big statement takes a lock.</strong> A rewrite takes
-       <code>ACCESS EXCLUSIVE</code> — it blocks reads <em>and</em> writes. Worse, it queues
-       behind whatever long query is already running, and the whole app queues behind it.</p>
-    <p class="small"><strong>2. Paging with OFFSET gets slower every page.</strong></p>
-    <pre><code class="language-sql">SELECT * FROM workspaces ORDER BY id LIMIT 1000 OFFSET 90000;
--- Postgres fetches and throws away 90,000 rows to give you 1,000</code></pre>
-    <pre><code class="language-sql">SELECT * FROM workspaces WHERE id > 90000 ORDER BY id LIMIT 1000;
--- an index seek. same cost on page 1 and page 900.</code></pre>
-    <p class="small muted">Keyset paging needs an index on what you sort by. Equality columns
-       first, then the range and sort columns.</p>
+    <p class="kicker">§4 Databases &middot; <span class="beat">What we nearly did</span></p>
+    <h2>What a migration file usually looks like</h2>
+    <pre><code class="language-sql">-- migrations/0042_add_currency.sql        orders: 2.4 million rows
+
+ALTER TABLE orders ADD COLUMN currency text;                -- instant
+
+UPDATE orders SET currency = 'NGN' WHERE currency IS NULL;  -- locks 2.4M rows,
+                                                            -- in one transaction
+
+ALTER TABLE orders ALTER COLUMN currency SET NOT NULL;      -- full table scan,
+                                                            -- blocks reads AND writes
+
+CREATE UNIQUE INDEX ON orders (reference);                  -- blocks writes for
+                                                            -- the whole build</code></pre>
+    <p><strong>Four ordinary lines.</strong> One is instant. The other three hold your
+       production database while the deploy sits there waiting.</p>
     <aside class="notes">
-        65s. OFFSET is promised in the abstract — this is where it lives, and it's more
-        memorable inside a real migration than as a standalone tip.
+        60s. Everyone has written this file. That's the point — it isn't reckless code,
+        it's the normal way to write a migration, and it stops being safe at some row count.
+        Nuance if asked: ADD COLUMN with a CONSTANT default is instant on Postgres 11+.
+        A volatile default like gen_random_uuid() still rewrites every row.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§4 Databases &middot; <span class="beat">Why it breaks things</span></p>
+    <h2>A slow migration doesn't just run slowly</h2>
+    <ul class="tight small">
+        <li><strong>It's one transaction.</strong> Every row that <code>UPDATE</code> touches
+            stays locked until the entire migration commits — not until that statement
+            finishes.</li>
+        <li><strong>Some of it blocks readers too.</strong> <code>SET NOT NULL</code> and
+            table rewrites take <code>ACCESS EXCLUSIVE</code>: no writes, and no reads either.</li>
+        <li><strong>Locks queue, and the queue is the real killer.</strong> Your migration
+            waits behind whatever long query is already running — and every request that
+            arrives after it waits behind your migration.</li>
+    </ul>
+    <pre><code class="language-sql">SET lock_timeout = '3s';   -- fail fast instead of building a queue behind you</code></pre>
+    <div class="note">
+        <strong>Migrations change structure, and they should be quick.</strong>
+        Moving data is a separate job — one that runs in batches, can be paused, and can be
+        resumed. Don't put a two-million-row <code>UPDATE</code> in a file your deploy is
+        waiting on.
+    </div>
+    <aside class="notes">
+        65s. The queue point is the one people haven't thought about: a migration that only
+        needs 200ms can still stall the site for a minute, because of what it got stuck
+        behind and what piled up behind it.
+        Gentler NOT NULL if asked: ADD CONSTRAINT ... CHECK (col IS NOT NULL) NOT VALID,
+        then VALIDATE CONSTRAINT — that takes a much weaker lock.
     </aside>
 </section>
 
@@ -711,6 +923,12 @@ while True:
     save_checkpoint(last_id)                           # safe to restart
     log.info("backfill.progress", extra={"last_id": last_id})
     time.sleep(0.1)                                    # leave room for users</code></pre>
+    <div class="note">
+        <strong>Why <code>id > last_id</code> and not <code>OFFSET</code>:</strong>
+        <code>LIMIT 1000 OFFSET 90000</code> makes Postgres fetch and throw away 90,000 rows
+        to hand you 1,000 — so every batch is slower than the one before it. Keyset paging
+        is an index seek: batch 900 costs the same as batch 1.
+    </div>
     <p class="small">Nine lines, and every one of them is a pattern from earlier in this talk.</p>
     <aside class="notes">
         65s. Point at each comment: bounded memory (unit 2), safe restart (unit 3),
@@ -754,59 +972,100 @@ while True:
 </section>
 
 <section>
-    <p class="kicker">§5 Observability &middot; <span class="beat">What broke, and why</span></p>
-    <h2>We couldn't name our own events</h2>
-    <ul class="tight small">
-        <li><strong>No event names.</strong> There was no "booking confirmed" anywhere —
-            only a row that used to look one way and now looks another.</li>
-        <li><strong>No ordering, no causality.</strong> Which function ran first? Did another
-            one already handle this? Nobody could say.</li>
-        <li><strong>Races.</strong> Two functions reacting to the same change, both acting.</li>
-        <li><strong>Debugging meant reconstructing intent from a diff</strong> — after the fact,
-            from data that had since changed again.</li>
-    </ul>
+    <p class="kicker">§5 Observability &middot; <span class="beat">What it cost us</span></p>
+    <h2>Three things we could never do</h2>
+    <ol class="tight small">
+        <li><strong>Track anything.</strong> There was no "booking confirmed" anywhere in the
+            system — only a row that used to look one way and now looks another. You cannot
+            count, search or alert on something that was never given a name.</li>
+        <li><strong>Retry anything.</strong> When a function failed, there was nothing to
+            replay. The database change had already happened; the reaction was simply lost,
+            and lost quietly.</li>
+        <li><strong>Add anything safely.</strong> A new feature meant another function
+            diffing the same rows, re-deriving the same meaning — and hoping it didn't
+            collide with the two already doing it.</li>
+    </ol>
     <div class="note">
-        An outbox row named <code>order.paid</code> isn't just a delivery mechanism.
-        It's the log line you'll want at 3am.
+        Debugging meant reconstructing what somebody had <em>intended</em>, from data that
+        had since changed again.
     </div>
-    <aside class="notes">55s. Ties straight back to unit 5's outbox.</aside>
+    <aside class="notes">
+        55s. Own it as a mistake — "this is something we built, and it was the wrong call."
+        The room trusts that far more than a list of best practices.
+    </aside>
 </section>
 
 <section>
-    <p class="kicker">§5 Observability &middot; <span class="beat">What we did</span></p>
-    <h2>Name the event, then carry an id through it</h2>
-    <pre><code class="language-python">log.info("mandate.debit.started",
-         extra={"request_id": rid, "mandate_id": mid, "attempt": attempt})</code></pre>
+    <p class="kicker">§5 Observability &middot; <span class="beat">What we should have done</span></p>
+    <h2>Name the event. Publish it. Consume it.</h2>
+    <pre><code class="language-text">          booking confirmed
+                  │
+                  ▼
+        ┌───────────────────┐
+        │ booking.confirmed │   ← an event, with a name
+        └───────────────────┘
+                  │
+        ┌─────────┼─────────┬──────────┐
+        ▼         ▼         ▼          ▼
+     notify    invoice   analytics   audit log</code></pre>
     <ul class="tight small">
-        <li><strong>Explicit events with names</strong>, published on purpose — not inferred
-            from a diff.</li>
-        <li><strong>Structured logs</strong> — fields, not prose. You cannot grep a sentence
-            at 3am.</li>
-        <li><strong>One id, carried everywhere</strong> — into task arguments, across service
-            calls — so the async half stays connected to the request that started it.</li>
+        <li><strong>Easier to track.</strong> The name is searchable, countable, alertable.
+            "How many bookings were confirmed today" becomes a query instead of an
+            archaeology project.</li>
+        <li><strong>Easier to retry.</strong> The event is a record. A consumer failed?
+            Replay it — which is exactly why it needs the idempotency key from earlier.</li>
+        <li><strong>Easier to build.</strong> A new feature is a new consumer. Nothing that
+            already works has to be touched.</li>
     </ul>
     <aside class="notes">
-        50s. Optional aside if ahead of time: we once chose raw sockets over HTTP between two
-        services assuming HTTP overhead mattered. Never measured it. Cost us status codes,
-        reconnect logic, and any chance of tracing. We optimised the transport, and the
-        transport was never the bottleneck.
+        60s. Land this: we already had the outbox from the last section available to us.
+        An outbox row IS a named event. We just never thought of it that way.
     </aside>
 </section>
 
 <section>
     <p class="kicker">§5 Observability &middot; <span class="beat">The concept</span></p>
-    <h2>Averages hide the thing you need to see</h2>
-    <pre><code class="language-text">1,000 requests: 999 at 50ms, 1 at 30s
+    <h2>"The dashboard says it's fine"</h2>
+    <p class="small">A customer says the app is slow. You open the dashboard. Average
+       response time: <strong>80ms</strong>. Green across the board. You tell them it looks
+       fine on your end.</p>
+    <p class="small"><strong>You are both telling the truth.</strong></p>
+    <pre><code class="language-text">1,000 requests
 
-mean   =  80ms    ← the dashboard is green
-p50    =  50ms    ← still green
-p99    =  50ms
-p99.9  =  30s     ← what your worst users actually experience</code></pre>
-    <p><strong>Alert on p99, not on averages.</strong>
-       <span class="small muted">p99 = 99 out of 100 requests are faster than this.</span></p>
-    <p class="small">At scale p99 isn't rare. It's everyone, eventually — because one page
-       makes thirty calls.</p>
-    <aside class="notes">50s.</aside>
+    999  took     50 ms
+      1  took     30 s
+   ─────────────────────
+   mean          80 ms      ← what the dashboard showed you</code></pre>
+    <p>The average is real. It just describes a request that <strong>never happened
+       to anybody</strong>.</p>
+    <aside class="notes">
+        50s. Tell it as the conversation — customer says slow, dashboard says fine.
+        Everyone in the room has been on one side of it.
+        One outlier in a thousand moved the mean from 50ms to 80ms and stayed invisible.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§5 Observability &middot; <span class="beat">The concept</span></p>
+    <h2>Why the slow 1% isn't 1% of your users</h2>
+    <p class="small">Line every request up from fastest to slowest:</p>
+    <pre><code class="language-text">p50    the middle one          — half your requests were faster
+p99    99 out of 100 were faster than this
+p99.9  999 out of 1,000 were faster than this</code></pre>
+    <p class="small">Now: one page load in your app makes <strong>30 API calls</strong>.
+       For that page to feel fast, all 30 have to land in the quick 99%.</p>
+    <pre><code class="language-text">0.99 ^ 30  =  0.74
+
+   →  26% of page loads hit the slow path.
+   →  roughly 1 in 4.</code></pre>
+    <p><strong>p99 is not your unluckiest customer. It is a quarter of your traffic.</strong>
+       Alert on it.</p>
+    <aside class="notes">
+        60s. This is the number that makes the point — say it slowly.
+        The intuition people have is "p99 = 1% of users, so who cares".
+        The maths says the opposite as soon as one page makes many calls.
+        If asked: 10 calls -> 10%, 30 calls -> 26%, 50 calls -> 40%.
+    </aside>
 </section>
 
 <section>

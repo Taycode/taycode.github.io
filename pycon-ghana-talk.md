@@ -95,16 +95,16 @@ audience always knows where they are.
 | 1 | Core + automation server, `BackgroundTasks` under 200k items | Decoupling the request cycle |
 | 2 | The midnight loop over 30,000 mandates | Job granularity |
 | — | *(interlude)* A daily export run by hand → Airflow; Celery vs Airflow vs Kafka | Picking the tool |
-| 3 | Two servers, one cron, a double debit | Idempotency |
-| 4 | Every worker retrying a wobbling provider | Backoff, jitter, circuit breakers |
-| 5 | A balance that went negative past its check | Atomicity, ledgers, transactions |
+| 3 | Two servers, one cron, a double debit | Locking (pessimistic, optimistic, partitioning) → idempotency |
+| 4 | A pipeline stalled by one slow third-party API | Backoff, jitter, circuit breakers, provider failover |
+| 5 | A balance that went negative past its check | Atomicity, ledgers vs precomputed balances, transactions |
 | 6 | Backfilling 100k rows on a live product | Batching, keyset pagination |
-| 7 | Cloud functions diffing database snapshots | Named events, tracing, p99 |
+| 7 | Cloud functions diffing database snapshots | Named events, percentiles |
 
 ## Status
 
-- [x] Deck built — `pycon-ghana.html`, 41 slides, speaker notes with timings on every slide
-- [ ] Timed rehearsal — 40 slides in 30 min is tight; cut candidates marked in the notes
+- [x] Deck built — `pycon-ghana.html`, 49 slides, speaker notes with timings on every slide
+- [ ] **Cut ~12 slides.** 49 slides in 30 min is roughly 36s each — too fast for teaching slides
 - [ ] PyCon Ghana logo for the title slide (`assets/images/` has none)
 
 Preview: `python3 -m http.server 8000` → <http://localhost:8000/pycon-ghana.html>
