@@ -1,0 +1,117 @@
+# PyCon Ghana — Working Doc
+
+**Length:** 30 minutes
+**Speaker:** Abdulmateen Tairu (@taycode)
+**Deliverable:** reveal.js deck — `pycon-ghana.html`
+**Stack shown on slides:** FastAPI + Postgres + Celery/Redis
+
+---
+
+## Accepted abstract (public, submitted — do not contradict)
+
+As applications grow, the hardest problems are rarely about writing business
+logic—they come from handling scale, throughput, expensive queries, large
+datasets, and systems that begin to slow down under pressure.
+
+This talk explores the practical realities of building data-intensive
+applications in Python, focusing on the engineering decisions that help systems
+remain performant and maintainable as data volume grows.
+
+Topics promised:
+- Efficient data access patterns and avoiding expensive queries
+- Understanding database bottlenecks and indexing strategies
+- Handling high-throughput workloads with batching and asynchronous processing
+- Memory and CPU considerations when processing large datasets
+- Pagination strategies and why OFFSET pagination breaks at scale
+- Caching, aggregation trade-offs, and reducing unnecessary computation
+- Observability techniques for identifying performance bottlenecks in production
+
+---
+
+## Submitted outline (verbatim, as filed with reviewers)
+
+1. Introduction: What Makes Applications "Data-Intensive"?   (3 min)
+   - Characteristics of data-intensive systems
+   - Why systems become unreliable as scale increases
+   - Common production pain points
+2. Processing Workloads Reliably                             (6 min)
+   - Background workers and asynchronous processing
+   - Decoupling expensive operations from request cycles
+   - Handling spikes in traffic and workload bursts
+3. Reliability Patterns That Matter                          (8 min)
+   - Idempotency and safe retries
+   - Exponential backoff strategies
+   - Circuit breakers for unstable third-party services
+   - Preventing cascading failures
+4. Databases & Consistency Under Load                        (6 min)
+   - Database transactions and rollback strategies
+   - Avoiding expensive queries and bottlenecks
+   - Common scaling mistakes in backend systems
+5. Observability & Debugging Production Systems              (4 min)
+   - Logs, metrics, and tracing
+   - Identifying bottlenecks before systems fail
+   - Building visibility into system behavior
+6. Closing Thoughts & Q&A                                    (3 min)
+
+---
+
+## Story slots — needed from Tay
+
+Real incidents beat synthetic examples. For each: the moment, the number, the
+fix. Raw bullets are fine. Flag anything confidential so it stays off the slides.
+
+| Slot | Section | What's needed |
+|---|---|---|
+| #1 | §1 | An incident that opens the talk. Screenshot-able if possible — a log line, a graph, a Slack message. |
+| #2 | §2 | Something expensive you moved out of a request. What it was, how long it took, what broke before. |
+| #3 | §3 | A duplicate-work or retry incident. A near-miss counts. |
+| #4 | §4 | A transaction, locking, or slow-query incident. Before/after numbers if you have them. |
+| #5 | §5 | Optional — a dashboard that said everything was fine while it wasn't. |
+
+Deck currently ships with synthetic examples in these positions, marked
+`STORY SLOT #n` in `pycon-ghana.md`. They work as-is; swapping in real ones is
+an upgrade, not a blocker.
+
+---
+
+## Structure
+
+Topic-led, not narrative. Seven units, each teaching one idea through one real
+incident. Every unit follows the same five beats:
+
+```
+1. The situation   — what we were building        (architecture diagram)
+2. What broke      — the symptom, concretely
+3. Why it broke    — the mechanism                (diagram or code)
+4. What we did     — the change                   (diagram v2 + code)
+5. The concept     — named, generalised, portable
+```
+
+Each slide carries a kicker showing its section and which beat it is, so the
+audience always knows where they are.
+
+| Unit | Example | Concept |
+|---|---|---|
+| 1 | Core + automation server, `BackgroundTasks` under 200k items | Decoupling the request cycle |
+| 2 | The midnight loop over 30,000 mandates | Job granularity |
+| — | *(interlude)* A daily export run by hand → Airflow; Celery vs Airflow vs Kafka | Picking the tool |
+| 3 | Two servers, one cron, a double debit | Idempotency |
+| 4 | Every worker retrying a wobbling provider | Backoff, jitter, circuit breakers |
+| 5 | A balance that went negative past its check | Atomicity, ledgers, transactions |
+| 6 | Backfilling 100k rows on a live product | Batching, keyset pagination |
+| 7 | Cloud functions diffing database snapshots | Named events, tracing, p99 |
+
+## Status
+
+- [x] Deck built — `pycon-ghana.html`, 41 slides, speaker notes with timings on every slide
+- [ ] Timed rehearsal — 40 slides in 30 min is tight; cut candidates marked in the notes
+- [ ] PyCon Ghana logo for the title slide (`assets/images/` has none)
+
+Preview: `python3 -m http.server 8000` → <http://localhost:8000/pycon-ghana.html>
+Press **S** for speaker notes, **Esc** for the slide grid.
+
+## Deliberately left out
+
+Web activity pipeline as its own unit, expand/contract detail, N+1 queries,
+deadlock lock-ordering, thread pools / the GIL, sockets vs HTTP — the last one
+lives in speaker notes as a Q&A answer.
