@@ -50,6 +50,12 @@
         .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
         .cols pre { font-size: 0.44em; }
 
+        .bridge {
+            margin-top: 22px; padding-top: 12px; font-size: 0.76em;
+            color: #7d7d7d; font-style: italic;
+            border-top: 1px solid rgba(255,255,255,0.12);
+        }
+        .bridge strong { color: #8fb8d4; }
         .note {
             border-left: 4px solid #ffd43b; background: rgba(255,212,59,0.07);
             padding: 12px 16px; font-size: 0.78em; margin-top: 18px;
@@ -115,7 +121,11 @@
         <tr><td class="muted">6</td><td>Backfilling 100,000 rows live</td><td><strong>Batching &amp; pagination</strong></td></tr>
         <tr><td class="muted">7</td><td>Events we couldn't name</td><td><strong>Observability</strong></td></tr>
     </table>
-    <aside class="notes">45s. Agenda by topic. Don't oversell — just walk the right-hand column.</aside>
+    <p class="bridge">Starting with number one — <strong>work that never left the web server.</strong></p>
+    <aside class="notes">
+        45s. Agenda by topic. Don't oversell — just walk the right-hand column,
+        then hand straight into the first story.
+    </aside>
 </section>
 
 <section>
@@ -283,9 +293,11 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
         upstream — and <strong>work of different weights needs different queues</strong>,
         or the one-second job waits behind the twenty-minute one.
     </div>
+    <p class="bridge">That was work trapped inside a <strong>request</strong>. The next one is work trapped inside a <strong>loop</strong>.</p>
     <aside class="notes">
         60s. The table pays off the BackgroundTasks slide; the note pays off the other two.
         Closing line: ask where the CPU is, not how quickly you replied.
+        Then the bridge — it stops the next story feeling like a fresh start.
     </aside>
 </section>
 
@@ -317,7 +329,7 @@ def process_mandates():
 </section>
 
 <section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did &amp; why it matters</span></p>
+    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did &amp; the concept</span></p>
     <h2>One job per mandate</h2>
     <pre><code class="language-python">@cron("0 0 * * *")
 def enqueue_mandates():
@@ -345,7 +357,7 @@ def process_mandate(self, mandate_id):
 </section>
 
 <section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">A different shape of problem</span></p>
+    <p class="kicker">§2 Processing workloads &middot; <span class="beat">Before &amp; after</span></p>
     <h2>An export that lived on someone's laptop</h2>
     <div class="cols">
         <div>
@@ -405,6 +417,7 @@ def process_mandate(self, mandate_id):
         Most of the pain I've seen came from bending one into another — building
         dependency graphs out of Celery chains, or running Kafka where a table would do.
     </div>
+    <p class="bridge">Everything so far pushes work <strong>off the critical path</strong> — into queues, workers, schedulers. Which means it now runs somewhere you are not watching. And sometimes it runs <strong>twice</strong>.</p>
     <aside class="notes">
         60s. Say the microservices line here: splitting services buys you isolation and
         independent scaling, and buys you every problem in the next two sections.
@@ -618,7 +631,7 @@ with jitter      ██ ▌ █▌   ▌██  ██ ▌      █ ▌██   
 </section>
 
 <section>
-    <p class="kicker">§3 Reliability &middot; <span class="beat">The concept</span></p>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">Designing for it</span></p>
     <h2>An open circuit is a chance to go elsewhere</h2>
     <pre><code class="language-python">def charge(amount, ref):
     for provider in PROVIDERS:                  # primary, then fallback
@@ -642,6 +655,7 @@ with jitter      ██ ▌ █▌   ▌██  ██ ▌      █ ▌██   
         whoever actually moved the money — and the two providers have different id spaces.
         <strong>Your idempotency key stays yours.</strong>
     </div>
+    <p class="bridge">Retries, replays, failovers — every one of them means the same work reaching your data <strong>more than once</strong>. So the data has to survive it.</p>
     <aside class="notes">
         75s. More than one payment provider is normal in Nigerian fintech, not exotic —
         the room will recognise this instantly.
@@ -733,8 +747,10 @@ COMMIT;</code></pre>
 </section>
 
 <section>
-    <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
+    <p class="kicker">§4 Databases &middot; <span class="beat">A different system</span></p>
     <h2>What belongs inside a transaction</h2>
+    <p class="small">Another fintech. Every withdrawal sends an SMS, and the money moving and
+       the message going out have to agree — <strong>we saw both halves fail, separately.</strong></p>
     <div class="cols">
         <div><p class="small warn"><strong>Locked for someone else's outage</strong></p>
             <pre><code class="language-python">with db.begin():
@@ -870,6 +886,7 @@ while True:
         is an index seek: batch 900 costs the same as batch 1.
     </div>
     <p class="small">A dozen lines, and every one of them is a pattern from earlier in this talk.</p>
+    <p class="bridge">Queues, keys, locks, batches — <strong>every one of them is invisible</strong> until something measures it.</p>
     <aside class="notes">
         65s. Point at each comment: bounded memory and batching (§2), safe restart (§3),
         short transaction and keyset paging (§4), visible progress (§5).
@@ -935,7 +952,7 @@ while True:
 </section>
 
 <section>
-    <p class="kicker">§5 Observability &middot; <span class="beat">The concept</span></p>
+    <p class="kicker">§5 Observability &middot; <span class="beat">What we couldn't see</span></p>
     <h2>"The dashboard says it's fine"</h2>
     <p class="small">A customer says the app is slow. You open the dashboard. Average
        response time: <strong>80ms</strong>. Green across the board. You tell them it looks
@@ -980,7 +997,7 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
 </section>
 
 <section>
-    <p class="kicker">§5 Observability &middot; <span class="beat">The concept</span></p>
+    <p class="kicker">§5 Observability &middot; <span class="beat">What to watch</span></p>
     <h2>Four things worth instrumenting</h2>
     <ol class="tight small">
         <li><strong>Queue depth and oldest-message age.</strong> The earliest signal that work
