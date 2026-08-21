@@ -103,15 +103,33 @@ audience always knows where they are.
 
 ## Status
 
-- [x] Deck built — `pycon-ghana.html`, 49 slides, speaker notes with timings on every slide
-- [ ] **Cut ~12 slides.** 49 slides in 30 min is roughly 36s each — too fast for teaching slides
-- [ ] PyCon Ghana logo for the title slide (`assets/images/` has none)
+- [x] Deck built and restructured — `pycon-ghana.html`, **39 slides**
+- [x] Speaker notes with a timing budget on every slide
+- [ ] Timed rehearsal. 39 slides / 30 min ≈ 46s each — plausible, but unproven
+- [ ] Trace IDs: dropped in the §5 rewrite, not yet restored
 
 Preview: `python3 -m http.server 8000` → <http://localhost:8000/pycon-ghana.html>
 Press **S** for speaker notes, **Esc** for the slide grid.
 
-## Deliberately left out
+## Slide budget
 
-Web activity pipeline as its own unit, expand/contract detail, N+1 queries,
-deadlock lock-ordering, thread pools / the GIL, sockets vs HTTP — the last one
-lives in speaker notes as a Q&A answer.
+| Section | Slides | Minutes |
+|---|---|---|
+| Opening | 3 | 2.5 |
+| §2 Processing workloads | 11 | 9 |
+| §3 Reliability | 9 | 7 |
+| §4 Databases | 9 | 7 |
+| §5 Observability | 5 | 3.5 |
+| Close + Q&A | 2 | 2 |
+
+§2 is deliberately the largest — it's the best-developed material and it sets
+up everything after it.
+
+## Cut in the restructure (51 → 39)
+
+Eleven slide-pairs merged where two slides carried one idea — situation and
+symptom, fix and concept. Plus one full cut: expand/contract migrations.
+
+Also gone earlier: the thread-pool / GIL slide, N+1 queries, deadlock lock
+ordering, and sockets vs HTTP (that one survives in speaker notes as a Q&A
+answer).

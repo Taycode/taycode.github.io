@@ -32,6 +32,11 @@
         }
         .kicker .beat { color: #42affa; }
 
+        .conf-mark {
+            position: fixed; top: 16px; right: 22px; z-index: 1000;
+            height: 40px; width: auto; opacity: 0.55; pointer-events: none;
+        }
+        .title-slide .conf-logo { height: 96px; width: auto; margin-top: 34px; }
         .title-slide { text-align: center !important; }
         .title-slide h1 { color: #42affa; }
 
@@ -62,6 +67,7 @@
 </head>
 <body>
 <div class="reveal">
+    <img class="conf-mark" src="assets/images/pycon-ghana-2026.png" alt="PyCon Ghana 2026">
 <div class="slides">
 
 <!-- ══════════ OPENING · 3 slides · 2.5 min ══════════ -->
@@ -69,10 +75,10 @@
 <section class="title-slide">
     <h1>Building Data-Intensive Applications in Python</h1>
     <h3>Seven things that broke, and what each one taught</h3>
-    <p style="margin-top: 46px;">
-        <strong>Abdulmateen Tairu</strong> (@taycode)<br>
-        <span class="muted small">PyCon Ghana</span>
+    <p style="margin-top: 40px;">
+        <strong>Abdulmateen Tairu</strong> (@taycode)
     </p>
+    <img class="conf-logo" src="assets/images/pycon-ghana-2026.png" alt="PyCon Ghana 2026">
     <aside class="notes">0:00 · 10s.</aside>
 </section>
 
@@ -82,7 +88,8 @@
         <li>A <strong>web activity pipeline</strong> — scraping and classifying URLs for millions of users</li>
         <li>A <strong>savings fintech</strong> — 3,000 → 30,000 users, roughly ₦1bn processed in a year</li>
         <li>Two and a half years of <strong>ETL pipelines</strong> — Airflow, millions of rows a day</li>
-        <li>A <strong>unified inbox</strong> — email, SMS, WhatsApp, Instagram in one stream</li>
+        <li>A <strong>unified inbox SaaS</strong> — processing millions of messages from
+            different social channels, for both B2B and B2C, in Germany and Austria</li>
     </ul>
     <p style="margin-top: 26px;">Every example in this talk is something that broke in production,
        at a scale most of us are already at.</p>
@@ -111,87 +118,155 @@
     <aside class="notes">45s. Agenda by topic. Don't oversell — just walk the right-hand column.</aside>
 </section>
 
-<!-- ══════════ UNIT 1 · Decoupling the request cycle · 5 slides ══════════ -->
+<section>
+    <p class="kicker">§2 Processing workloads &middot; <span class="beat">The situation</span></p>
+    <h2>The work was a workflow, not a job</h2>
+    <p class="small">We built data pipelines for other companies. Company A comes to us with
+       <strong>50,000 raw support conversations</strong> and wants them cleaned and labelled
+       so they can train a model on them.</p>
+    <pre><code class="language-text">   step 1   ingest the client's export        millions of rows
+   step 2   strip names, emails, card numbers  slow, and must not fail quietly
+   step 3   auto-label with a model            expensive
+   step 4   send the unsure ones to reviewers  humans, so: hours or days
+   step 5   package it and hand it back        big files, cloud storage</code></pre>
+    <p class="small">Every client has a different sequence. Some skip step 3. Some run step 4
+       twice. <strong>The sequence is the product</strong> — so it lives in one place, and the
+       work lives in another.</p>
+    <aside class="notes">
+        55s. Concrete beats abstract — a real client asking for a real thing.
+        Plant this: steps differ per client, and they take wildly different amounts of time.
+    </aside>
+</section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">The situation</span></p>
-    <h2>A core service and an automation service</h2>
-    <pre><code class="language-text">┌────────────────┐   "run step B"   ┌──────────────────────┐
-│  core (Django) │ ───────────────▶ │ automation (FastAPI) │
-│                │                  │                      │
-│ owns the       │                  │  step A    step B    │
-│ sequence       │ ◀─────────────── │  step C    step D    │
-└────────────────┘    callback      └──────────────────────┘</code></pre>
-    <p class="small">A client's project is a sequence of steps. Core owns the sequence,
-       automation owns the work. Core calls a step, automation runs it, calls back,
-       core decides what runs next.</p>
+    <h2>Three services, one loop</h2>
+    <pre><code class="language-text">┌──────────┐         ┌───────┐         ┌──────────┐   HTTP    ┌────────────┐
+│   core   │────────▶│ Kafka │────────▶│ gateway  │──────────▶│ automation │
+│ (Django) │ publish └───────┘ consume │  (Node)  │  request  │ (FastAPI)  │
+│          │                           └──────────┘           └─────┬──────┘
+│ owns the │                                                        │
+│ sequence │◀──────────── HTTP callback ────────────────────────────┘
+└──────────┘         "step 3 done, 812 flagged"</code></pre>
+    <p class="small">Core publishes "run step 3" to Kafka. The gateway consumes it and turns
+       it into an HTTP request. Automation does the work and calls core back. Core reads the
+       result, decides step 4 is next, and publishes again.</p>
+    <div class="note">
+        Kafka sits between core and the gateway. But the hop that matters —
+        <strong>gateway to automation — is a synchronous HTTP call.</strong>
+        The gateway waits for an answer.
+    </div>
     <aside class="notes">
-        50s. Draw the loop with your hand. Make sure they have the picture before
-        the next slide, because the next slide is the failure.
+        60s. Trace all four hops with your hand.
+        Plant the last line hard — the queue is early in the chain and the expensive work is
+        two hops past it. That is the whole failure, and nobody sees it coming.
     </aside>
 </section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">What broke</span></p>
-    <h2>Then we started batching</h2>
-    <p>Core went from sending about <strong>10 items a second</strong> to
-       <strong>200,000 at a time</strong>.</p>
-    <ul class="tight">
-        <li>CPU pinned at 100%</li>
-        <li>The automation server restarted, over and over</li>
-        <li>Incoming requests dropped — <strong>including the callbacks</strong></li>
+    <h2>Then core started batching</h2>
+    <p class="small">Core went from publishing about <strong>10 messages a second</strong> to
+       dropping <strong>200,000 onto Kafka at once</strong>.</p>
+    <pre><code class="language-text">core ──▶ Kafka ──▶ gateway ──▶ automation
+          200,000     drains      200,000 synchronous
+          messages    flat out    HTTP requests</code></pre>
+    <ul class="tight small">
+        <li>Kafka took the burst without blinking — that's its job</li>
+        <li>The gateway drained it as fast as it could, turning every message into an HTTP call</li>
+        <li>Automation's CPU pinned at 100%, and it began <strong>restarting in a loop</strong></li>
+        <li>Requests from the gateway timed out — <strong>and so did the callbacks core was
+            waiting on</strong></li>
     </ul>
-    <p class="small muted" style="margin-top: 24px;">Which meant core was now waiting on
-       answers that were never coming.</p>
+    <p class="small muted">Core was now waiting on answers that were never coming.</p>
     <aside class="notes">
-        45s. The callback detail is the one that hurt — the failure fed itself.
+        55s. Last bullet is the sting: the failure fed itself, because the callbacks
+        travelled the same broken path.
     </aside>
 </section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">Why it broke</span></p>
     <h2>The work never left the web server</h2>
-    <pre><code class="language-python">@app.post("/step-b")
-def run_step_b(bg: BackgroundTasks):
-    bg.add_task(do_expensive_work)     # ← still this process
-    return {"status": "queued"}</code></pre>
-    <pre><code class="language-text">┌──────────────────────────────────┐
-│  one FastAPI process             │
-│  ┌────────────┐  ┌────────────┐  │
-│  │ accepting  │  │ doing the  │  │  ← same CPU
-│  │ requests   │  │ work       │  │  ← same memory
-│  └────────────┘  └────────────┘  │
-└──────────────────────────────────┘</code></pre>
-    <p><code>BackgroundTasks</code> runs after the response is sent, <strong>in the same
-       process</strong>. We had made the response fast. We had not moved the work.</p>
+    <pre><code class="language-python">@app.post("/steps/3", status_code=202)
+def auto_label(req: StepRequest, bg: BackgroundTasks):
+    bg.add_task(label_conversations, req.project_id, req.batch_id)
+    return {"status": "queued"}                      # ← still this process</code></pre>
+    <pre><code class="language-text">┌────────────────── one FastAPI process ──────────────────┐
+│  ┌──────────────────┐        ┌──────────────────────┐   │
+│  │ answering the    │        │ labelling 50,000     │   │  same CPU
+│  │ gateway's calls  │        │ conversations        │   │  same memory
+│  └──────────────────┘        └──────────────────────┘   │
+└─────────────────────────────────────────────────────────┘</code></pre>
+    <div class="note">
+        <strong>We had Kafka, and it didn't save us.</strong> A queue only protects the hop
+        it sits in front of. Ours was two hops upstream of the work.
+    </div>
     <aside class="notes">
-        60s. Be precise: sync `def` tasks get Starlette's threadpool, `async def` runs
-        on the event loop. Either way — same process, no durability.
+        60s. Precise: sync `def` tasks run in Starlette's threadpool, `async def` on the
+        event loop — either way, same process, nothing survives a restart.
+        The note is the real lesson of this unit. Land it slowly.
     </aside>
 </section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did</span></p>
-    <h2>Moved it to workers on their own machines</h2>
-    <pre><code class="language-text">┌──────────────┐      ┌───────┐      ┌──────────────────┐
-│ automation   │─────▶│ Redis │─────▶│  celery workers  │ × N
-│ (only accepts│      └───────┘      │  (own machines)  │
-│  requests)   │                     └──────────────────┘
-└──────────────┘                              │
-       ▲                                      │
-       └────────────── callback ──────────────┘</code></pre>
-    <pre><code class="language-python">@app.post("/step-b")
-def run_step_b(payload: Payload):
-    do_expensive_work.delay(payload.id)
-    return {"status": "queued"}</code></pre>
-    <p class="small">The API server's only job is to accept requests. Concurrency became
-       a number we set, instead of whatever the load happened to be.</p>
-    <aside class="notes">50s.</aside>
+    <h2>Made the synchronous hop cheap</h2>
+    <pre><code class="language-text">┌──────────┐   ┌───────┐   ┌─────────┐  HTTP   ┌────────────┐   ┌───────┐
+│   core   │──▶│ Kafka │──▶│ gateway │────────▶│ automation │──▶│ Redis │
+│ (Django) │   └───────┘   └─────────┘◀────────│  (accepts, │   └───┬───┘
+│          │                          202 in   │  enqueues) │       │
+│          │                          ~5ms     └────────────┘       ▼
+│          │                                          ┌──────────────────┐
+│          │◀── POST /callbacks/step-complete ────────│ celery workers ×N│
+└──────────┘        "step 3 done, 812 flagged"        │  (own machines)  │
+                                                      └──────────────────┘</code></pre>
+    <pre><code class="language-python">@app.post("/steps/3", status_code=202)
+def auto_label(req: StepRequest):
+    label_conversations.delay(req.project_id, req.batch_id)   # hand it off
+    return {"status": "queued"}                               # ~5ms
+
+@celery.task(bind=True, max_retries=3)
+def label_conversations(self, project_id, batch_id):
+    flagged = run_labelling_model(project_id, batch_id)
+    core.step_complete(project_id, step=3, needs_review=flagged)   # ← callback</code></pre>
+    <p class="small">The gateway's call now returns in milliseconds, so it stops mattering how
+       fast it drains Kafka. And <strong>the callback comes from the worker that actually did
+       the work</strong> — the only thing that knows when it's really finished.</p>
+    <aside class="notes">
+        65s. Two moves: the synchronous hop got cheap, and the callback moved to the worker.
+        Concurrency is now a number we set, not whatever the load happens to be.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did next</span></p>
+    <h2>Not every step costs the same</h2>
+    <p class="small">One queue meant every step queued behind every other step.
+       <strong>Stripping PII takes a second. Labelling a batch takes minutes.</strong>
+       Put them in the same line and the quick job waits an hour for no reason.</p>
+    <pre><code class="language-python">celery_app.conf.task_routes = {
+    "tasks.label_conversations": {"queue": "heavy"},   # CPU-bound, minutes
+    "tasks.package_dataset":     {"queue": "heavy"},   # big files, lots of memory
+    "tasks.strip_pii":           {"queue": "light"},   # quick, high volume
+    "tasks.notify_client":       {"queue": "light"},
+}</code></pre>
+    <pre><code class="language-text">queue: heavy   ──▶   4 workers  ×  large instances    celery -Q heavy -c 4
+queue: light   ──▶  20 workers  ×  small, shared      celery -Q light -c 20</code></pre>
+    <p class="small">Heavy work got a few big machines. Light work got many small shared ones.
+       And the two <strong>scale independently</strong> — a labelling backlog adds heavy
+       workers without touching anything else.</p>
+    <aside class="notes">
+        60s. Say the shape of the problem first: head-of-line blocking. A one-second job
+        stuck behind a twenty-minute job is pure waste, and it looks like "the system is slow".
+        This is the same isolation idea as bulkheads in the next section — but here it's
+        about matching the machine to the work, not just keeping failures apart.
+    </aside>
 </section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">The concept</span></p>
-    <h2>Decoupling work from the request cycle</h2>
+    <h2>Getting work out of the request path</h2>
     <p class="small">Moving work out of a request needs five things.
        <code>BackgroundTasks</code> gives you one of them.</p>
     <table>
@@ -203,21 +278,22 @@ def run_step_b(payload: Payload):
         <tr><td>Survives a restart</td><td class="warn">no</td><td class="good">yes</td></tr>
     </table>
     <div class="note">
-        A fast response is not the same as work that moved.
-        Ask where the CPU is, not how quickly you replied.
+        And two things it took us an outage to learn:
+        <strong>a queue only protects the hop it sits in front of</strong> — ours was two hops
+        upstream — and <strong>work of different weights needs different queues</strong>,
+        or the one-second job waits behind the twenty-minute one.
     </div>
-    <aside class="notes">55s. This table is the takeaway. Let it sit.</aside>
+    <aside class="notes">
+        60s. The table pays off the BackgroundTasks slide; the note pays off the other two.
+        Closing line: ask where the CPU is, not how quickly you replied.
+    </aside>
 </section>
-
-<!-- ══════════ UNIT 2 · Job granularity · 4 slides ══════════ -->
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">The situation</span></p>
     <h2>Debiting 3,000 accounts at midnight</h2>
-    <pre><code class="language-text">   00:00  ┌──────┐     ┌──────────────────────┐     ┌──────────┐
-   cron ──▶│ one  │────▶│ for mandate in ...:  │────▶│ payment  │
-           │ box  │     │     debit(mandate)   │     │ provider │
-           └──────┘     └──────────────────────┘     └──────────┘</code></pre>
+    <p class="small">A savings product. People set up a mandate; every midnight we move money
+       for all of them. This was one of the first things I was asked to fix.</p>
     <pre><code class="language-python">@cron("0 0 * * *")
 def process_mandates():
     mandates = Mandate.objects.filter(active=True)   # 3,000 rows in memory
@@ -225,38 +301,23 @@ def process_mandates():
     for mandate in mandates:
         results.append(debit_customer(mandate))      # a network call, each time
     send_summary(results)</code></pre>
-    <p class="small muted">A savings product. People set up a mandate; every midnight we
-       move money for all of them. This was one of the first things I was asked to fix.</p>
-    <aside class="notes">
-        50s. Real code, simplified. Say the number out loud — three thousand.
-        It was already hurting at three thousand, which is the point.
-    </aside>
-</section>
-
-<section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What broke, and why</span></p>
-    <h2>One unit of work was "the whole night"</h2>
     <ol class="tight small">
-        <li><strong>Blast radius.</strong> Mandate #412 raises, and #413 through #3,000
-            never run.</li>
-        <li><strong>Retries are all-or-nothing.</strong> You can re-run the entire night,
-            or nothing — and re-running debits the people who already paid.</li>
-        <li><strong>Memory grows with the data.</strong> 3,000 objects, plus 3,000
-            results, held for the whole run.</li>
-        <li><strong>No visibility.</strong> One log line for 3,000 financial operations.
-            Support asks "what happened to this customer?" and you cannot answer.</li>
+        <li><strong>Blast radius.</strong> Mandate #412 raises, and #413 to #3,000 never run.</li>
+        <li><strong>Retries are all-or-nothing.</strong> Re-run the night and you debit the
+            people who already paid.</li>
+        <li><strong>Memory grows with the data</strong> — every row and every result, held
+            for the whole run.</li>
+        <li><strong>No visibility.</strong> One log line for 3,000 financial operations.</li>
     </ol>
-    <div class="note">
-        The usual defence is try/except sprawl around everything — and it still doesn't
-        give you retries.
-    </div>
     <aside class="notes">
-        55s. Point 2 is the one that leads into the next unit — hold it lightly here.
+        70s. Say "three thousand" out loud — it was already hurting at three thousand.
+        Point 4 is the one that actually hurt: support asks what happened to a customer and
+        you cannot answer.
     </aside>
 </section>
 
 <section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did</span></p>
+    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did &amp; why it matters</span></p>
     <h2>One job per mandate</h2>
     <pre><code class="language-python">@cron("0 0 * * *")
 def enqueue_mandates():
@@ -267,15 +328,8 @@ def enqueue_mandates():
 @celery.task(bind=True, max_retries=3, autoretry_for=(ProviderError,))
 def process_mandate(self, mandate_id):
     debit_customer(Mandate.objects.get(id=mandate_id))</code></pre>
-    <pre><code class="language-text">cron ──▶ enqueue 3,000 jobs ──▶ [ queue ] ──▶ worker  worker  worker</code></pre>
-    <aside class="notes">55s. The cron now only decides WHAT runs. Workers do it.</aside>
-</section>
-
-<section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">The concept</span></p>
-    <h2>Granularity decides what you can do</h2>
-    <p class="lead">Whatever you made a unit of work is the only thing you can
-       <strong>retry</strong>, <strong>observe</strong>, or <strong>scale</strong>.</p>
+    <p class="lead"><strong>Whatever you made a unit of work is the only thing you can
+       retry, observe, or scale.</strong></p>
     <table>
         <tr><th>Unit = the whole night</th><th>Unit = one mandate</th></tr>
         <tr><td>one failure stops everything</td><td>one failure stops one customer</td></tr>
@@ -283,66 +337,58 @@ def process_mandate(self, mandate_id):
         <tr><td>memory = all rows</td><td>memory = one row</td></tr>
         <tr><td>one log line</td><td>a job id and status per customer</td></tr>
     </table>
-    <div class="note">
-        Same idea one level up: an ETL pipeline as one big script gives you the same four
-        problems. Split it into steps and you can re-run step 4 without redoing 1 to 3.
-    </div>
     <aside class="notes">
-        50s. The note is the Airflow years compressed into one sentence — say it, don't
-        expand it. It sets up the next slide.
+        75s. The cron now only decides WHAT runs; workers do it.
+        Aside if time: same idea one level up — an ETL pipeline as one big script has the
+        same four problems. Split it into steps and you can re-run step 4 alone.
     </aside>
 </section>
 
-<!-- ══════════ INTERLUDE · Picking the tool · 3 slides ══════════ -->
-
 <section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">The situation</span></p>
+    <p class="kicker">§2 Processing workloads &middot; <span class="beat">A different shape of problem</span></p>
     <h2>An export that lived on someone's laptop</h2>
-    <pre><code class="language-text">   every day, at a certain time
-              │
-              ▼
-   ┌──────────┐   runs the   ┌──────────┐   uploads   ┌─────────┐
-   │ a person │ ───script───▶│  laptop  │ ──the file─▶│  cloud  │
-   └──────────┘              └──────────┘             └─────────┘</code></pre>
-    <ul class="tight small">
-        <li>On leave, travelling, sick, or simply forgot — <strong>no export that day</strong></li>
-        <li>Nobody found out until someone downstream came asking</li>
-        <li>It ran on whatever Python happened to be on that machine</li>
-        <li>A failure halfway through meant starting again from the top, by hand</li>
-        <li><strong>No record of what ran, when, or whether it worked</strong></li>
-    </ul>
-    <aside class="notes">
-        50s. The "before" here isn't bad code — it's a person. That's what makes it land.
-        Ask the room how many have a script like this. Hands will go up.
-    </aside>
-</section>
-
-<section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did</span></p>
-    <h2>We moved it onto Airflow</h2>
-    <p class="small muted">A DAG with a schedule, four steps, and nobody's laptop involved.</p>
-    <pre><code class="language-text">   ┌─────────┐  ┌───────────┐  ┌──────────┐  ┌──────────────┐
-   │ extract │─▶│ transform │─▶│ validate │─▶│ upload to GCS│
-   └─────────┘  └───────────┘  └──────────┘  └──────────────┘
-
-     Airflow DAG  ·  scheduled  ·  retry per step  ·  Slack on finish or failure</code></pre>
-    <ul class="tight small">
-        <li>The schedule is <strong>in the repo</strong>, changed by a deploy — not by
-            remembering</li>
-        <li>Each step retries on its own; a failure at upload doesn't re-run the extract</li>
-        <li>Slack tells us it finished — and tells us louder when it didn't</li>
-        <li>Every run has a <strong>history you can open and look at</strong></li>
-    </ul>
-    <div class="note">
-        A task queue could have run the work. It couldn't have given us the schedule,
-        the ordered steps, the per-step retry, or the run history.
+    <div class="cols">
+        <div>
+            <p class="small warn"><strong>Before</strong></p>
+            <pre><code class="language-text">  every day, at a time
+          │
+   ┌──────────┐
+   │ a person │ runs a script
+   └──────────┘      │
+                     ▼
+              ┌──────────┐
+              │  laptop  │──▶ cloud
+              └──────────┘</code></pre>
+            <ul class="tight small">
+                <li>On leave, sick, or forgot — no export that day</li>
+                <li>Nobody knew until someone downstream asked</li>
+                <li>A failure halfway meant starting over, by hand</li>
+            </ul>
+        </div>
+        <div>
+            <p class="small good"><strong>After — an Airflow DAG</strong></p>
+            <pre><code class="language-text"> ┌────────┐  ┌───────────┐
+ │ extract│─▶│ transform │
+ └────────┘  └───────────┘
+                   │
+             ┌──────────┐  ┌────────┐
+             │ validate │─▶│ upload │
+             └──────────┘  └────────┘</code></pre>
+            <ul class="tight small">
+                <li>Schedule lives in the repo, not in someone's memory</li>
+                <li>Each step retries alone — a failed upload doesn't redo the extract</li>
+                <li>Slack when it finishes, louder when it doesn't</li>
+                <li>Every run has a history you can open</li>
+            </ul>
+        </div>
     </div>
     <aside class="notes">
-        55s. This is the Airflow argument, made concrete. Leads directly into the table.
+        70s. The "before" here isn't bad code — it's a person. Ask how many people have a
+        script like this. Hands go up.
+        A task queue could have run the work; it couldn't have given us the schedule, the
+        ordered steps, the per-step retry, or the history.
     </aside>
 </section>
-
-
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">Choosing</span></p>
@@ -366,10 +412,8 @@ def process_mandate(self, mandate_id):
     </aside>
 </section>
 
-<!-- ══════════ UNIT 3 · Idempotency · 5 slides ══════════ -->
-
 <section>
-    <p class="kicker">§3 Reliability &middot; <span class="beat">The situation</span></p>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">The situation &amp; what broke</span></p>
     <h2>We added a second server</h2>
     <pre><code class="language-text">        BEFORE                          AFTER
     ┌───────────┐                ┌───────────┐  ┌───────────┐
@@ -379,25 +423,17 @@ def process_mandate(self, mandate_id):
           │                            │              │
        midnight                    midnight       midnight
        1 debit                      1 debit    +   1 debit</code></pre>
-    <p class="small">Same savings product, more load. We scaled the way everyone scales —
-       another instance behind the load balancer. The deploy image carried the cron with it.</p>
-    <aside class="notes">45s. Nobody wrote a bug. The config did exactly what it said.</aside>
-</section>
-
-<section>
-    <p class="kicker">§3 Reliability &middot; <span class="beat">What broke</span></p>
-    <h2>People were debited twice</h2>
-    <ul class="tight">
-        <li>Money left accounts twice in one night</li>
-        <li>One balance went <strong class="warn">negative</strong> — past a check that
-            was supposed to make that impossible</li>
+    <p class="small">Same savings product, more load. We scaled the way everyone scales — and
+       the deploy image carried the cron with it.</p>
+    <ul class="tight small">
+        <li>Money left accounts <strong>twice in one night</strong></li>
+        <li>One balance went <strong class="warn">negative</strong>, past a check that was
+            supposed to make that impossible</li>
         <li>We found out because <strong>a customer told us</strong></li>
     </ul>
-    <p class="small muted" style="margin-top: 26px;">No alert fired. We had no per-customer
-       job history and nothing watching for impossible balances.</p>
     <aside class="notes">
-        45s. Be honest about the detection failure — it's the setup for §5, and the room
-        respects it. Note: the negative balance has a second cause, covered in unit 5.
+        70s. Nobody wrote a bug — the config did exactly what it said.
+        Be honest about the detection failure; it sets up §5 and the room respects it.
     </aside>
 </section>
 
@@ -433,56 +469,34 @@ def process_mandate(self, mandate_id):
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">What people try first</span></p>
     <h2>Three ways to stop two runners colliding</h2>
-    <p class="small"><strong>Pessimistic</strong> — assume a collision. Take a lock, make
-       everyone else wait.</p>
-    <pre><code class="language-python">with redis.lock("cron:mandates", timeout=3600):   # across machines
-    process_mandates()
-# or, within one database:  SELECT ... FROM mandates WHERE id = 42 FOR UPDATE</code></pre>
-    <p class="small"><strong>Optimistic</strong> — assume no collision. Check at the moment
-       you write.</p>
-    <pre><code class="language-sql">UPDATE mandates SET status = 'running', version = version + 1
- WHERE id = 42 AND version = 7;        -- 0 rows updated = someone beat you</code></pre>
-    <p class="small"><strong>Partitioning</strong> — never let two nodes want the same row.
-       Hash the id onto a ring; each node only handles what it owns.</p>
-    <pre><code class="language-python">if ring.owner(mandate_id) == this_node:
-    process(mandate_id)</code></pre>
-    <aside class="notes">
-        75s. Define each in one line as you go — the room will have heard the words and
-        not necessarily used them.
-        Pessimistic: good when collisions are common, costs you waiting and deadlocks.
-        Optimistic: good when they're rare, costs you handling the loser's retry.
-        Consistent hashing: the ring means adding a node reshuffles a small slice of keys
-        instead of all of them. Same trick as sharding a cache.
-        Do NOT oversell any of them — the next slide is why none of them finish the job.
-    </aside>
-</section>
-
-<section>
-    <p class="kicker">§3 Reliability &middot; <span class="beat">Why that isn't enough</span></p>
-    <h2>All three narrow the window. None of them close it.</h2>
     <table>
-        <tr><th>Approach</th><th>Where it still lets you down</th></tr>
-        <tr><td><strong>Distributed lock</strong></td>
-            <td>The holder stalls — a GC pause, a slow disk, a paused container — and the
-                TTL expires <em>while the work is still running</em>. Now there are two,
-                and neither knows.</td></tr>
-        <tr><td><strong>Optimistic locking</strong></td>
-            <td>Protects the row you version. It doesn't protect the debit you already
-                sent to the payment provider.</td></tr>
-        <tr><td><strong>Consistent hashing</strong></td>
-            <td>Ownership moves whenever a node joins or leaves. During that shuffle, two
-                nodes can both believe they own the same key.</td></tr>
+        <tr><th style="width:20%;">Approach</th><th style="width:38%;">The idea</th><th>Where it still lets you down</th></tr>
+        <tr><td><strong>Pessimistic</strong><br><span class="small muted">a lock</span></td>
+            <td class="small">Take it first, make everyone else wait.
+                <code>redis.lock(...)</code>, or <code>SELECT ... FOR UPDATE</code></td>
+            <td class="small">The holder stalls — GC pause, slow disk — and the TTL expires
+                <em>while the work is still running</em>.</td></tr>
+        <tr><td><strong>Optimistic</strong><br><span class="small muted">a version</span></td>
+            <td class="small">Check at write time.<br>
+                <code>UPDATE ... WHERE version = 7</code><br>0 rows means someone beat you.</td>
+            <td class="small">Protects the row you version. Not the debit you already sent
+                the payment provider.</td></tr>
+        <tr><td><strong>Partitioning</strong><br><span class="small muted">a hash ring</span></td>
+            <td class="small">Never let two nodes want the same row.
+                <code>if ring.owner(id) == me</code></td>
+            <td class="small">Ownership moves when a node joins or leaves. Mid-shuffle, two
+                nodes can both think they own a key.</td></tr>
     </table>
     <div class="note">
         Every one of these makes a second run <strong>less likely</strong>.
         None of them makes a second run <strong>safe</strong>.
-        That is a different problem, and it needs a different tool.
     </div>
     <aside class="notes">
-        60s. This is the hinge of the section. Land the last line and pause —
-        the next slide is the answer.
-        If asked "so are locks useless?" — no. Use them to avoid wasted work and
-        contention. Just don't use them as your correctness guarantee.
+        80s. Define each in a line — the room has heard the words, not necessarily used them.
+        Consistent hashing: the ring means adding a node reshuffles a slice, not everything.
+        Land the last line and pause. The next slide is the answer.
+        If asked "so are locks useless?" — no. Use them to avoid wasted work. Just don't use
+        them as your correctness guarantee.
     </aside>
 </section>
 
@@ -533,32 +547,12 @@ key = f"{mandate_id}:{run_date}"       # same key every attempt</code></pre>
     </aside>
 </section>
 
-<!-- ══════════ UNIT 4 · Retries · 4 slides ══════════ -->
-
 <section>
-    <p class="kicker">§3 Reliability &middot; <span class="beat">The situation</span></p>
-    <h2>A pipeline that depends on somebody else's API</h2>
-    <p class="small">A web activity tracker. Users' apps send us a URL; a worker fetches the
-       page and asks a third-party service to classify what it's about. That classification
-       is the whole product — <strong>every single job has to make that call.</strong></p>
-    <pre><code class="language-text">   [ queue ]──▶ worker ─┐
-             ──▶ worker ─┤
-             ──▶ worker ─┼──▶  classification API   ← not ours
-             ──▶ worker ─┤       (one service,
-             ──▶ worker ─┘        rate limited)</code></pre>
-    <p class="small">Dozens of workers, and one dependency none of us control. It was fine
-       for months.</p>
-    <aside class="notes">
-        45s. Say plainly what the system does before anything goes wrong.
-        The point to plant: many workers, one shared dependency, no control over it.
-    </aside>
-</section>
-
-<section>
-    <p class="kicker">§3 Reliability &middot; <span class="beat">What broke, and why</span></p>
-    <h2>The API got slow, and we made it worse</h2>
-    <p class="small">One afternoon the classification service started responding slowly.
-       Not down — just slow. Our retry code looked like this:</p>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">The situation &amp; what broke</span></p>
+    <h2>A pipeline leaning on somebody else's API</h2>
+    <p class="small">A web activity tracker: users' apps send a URL, a worker fetches the page
+       and asks a third-party service to classify it. <strong>Every job makes that call.</strong>
+       One afternoon the service got slow — not down, just slow.</p>
     <pre><code class="language-python">for attempt in range(5):
     try:
         return classify(url)
@@ -568,17 +562,12 @@ key = f"{mandate_id}:{run_date}"       # same key every attempt</code></pre>
 t+1s   every worker retries at the same instant  ──▶ more load, slower still
 t+2s   every worker retries at the same instant  ──▶ it starts returning errors
 t+3s   every worker retries at the same instant  ──▶ ...</code></pre>
-    <ul class="tight small">
-        <li>Every worker failed at roughly the same moment, waited the <strong>same fixed
-            second</strong>, and came back together — so we multiplied the load on a service
-            that was already struggling.</li>
-        <li>Meanwhile each worker sat blocked inside <code>sleep</code>, so
-            <strong>our own queue backed up</strong> behind an outage we were helping cause.</li>
-    </ul>
+    <p class="small">Every worker failed together, waited the <strong>same fixed second</strong>,
+       and came back together. And each one sat blocked in <code>sleep</code>, so
+       <strong>our own queue backed up</strong> behind an outage we were helping cause.</p>
     <aside class="notes">
-        60s. Name it once: the thundering herd.
-        The two bullets are the whole slide — we hurt them, and we hurt ourselves.
-        Emphasise "not down, just slow" — that's what makes retries feel reasonable.
+        75s. Name it once: the thundering herd.
+        "Not down, just slow" is what makes retrying feel like the reasonable thing to do.
     </aside>
 </section>
 
@@ -627,12 +616,7 @@ with jitter      │ █│▌ │ ▌█│  ▌│    spread across the window
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">The concept</span></p>
     <h2>An open circuit is a chance to go elsewhere</h2>
-    <p class="small">Failing fast is good. <strong>Failing over is better</strong> — if the
-       work can be done by somebody else.</p>
-    <pre><code class="language-python">class PaymentProvider(Protocol):
-    def charge(self, amount: int, ref: str) -> ChargeResult: ...
-
-def charge(amount, ref):
+    <pre><code class="language-python">def charge(amount, ref):
     for provider in PROVIDERS:                  # primary, then fallback
         if breaker.is_open(provider.name):
             continue                            # known down — skip it
@@ -640,42 +624,29 @@ def charge(amount, ref):
         record(ref, provider=provider.name, external_id=result.id)
         return result
     raise AllProvidersDown</code></pre>
-    <p class="small">This only works if you built for it <em>before</em> the outage.</p>
-    <aside class="notes">
-        55s. Very common in Nigerian fintech — more than one payment provider is normal,
-        not exotic. The room will recognise this immediately.
-    </aside>
-</section>
-
-<section>
-    <p class="kicker">§3 Reliability &middot; <span class="beat">The concept</span></p>
-    <h2>What failover demands of your code</h2>
+    <p class="small">This only works if you built for it <em>before</em> the outage:</p>
     <ol class="tight small">
-        <li><strong>One interface, many adapters.</strong> The caller must not know or care
-            which provider answered. The moment business logic says
+        <li><strong>One interface, many adapters.</strong> The moment business logic says
             <code>if provider == "x"</code>, failover has stopped being switchable.</li>
-        <li><strong>Normalise everything on the way back in.</strong> Same result shape, same
-            status names, same error categories. Two providers will not agree on what
-            "pending" means — that translation is your job, at the edge.</li>
-        <li><strong>Record who processed what.</strong> Store the provider name and
-            <em>their</em> reference id against the transaction.</li>
+        <li><strong>Normalise on the way back in.</strong> Two providers will not agree on
+            what "pending" means. That translation is your job, at the edge.</li>
+        <li><strong>Record who processed what</strong> — their name, and <em>their</em>
+            reference id.</li>
     </ol>
     <div class="note">
-        That last one is not bookkeeping. Reconciliation, refunds and disputes all go back
-        to the provider that actually moved the money — and the two of them have completely
-        different id spaces. <strong>Your idempotency key stays yours</strong>; theirs is
-        just something you store alongside it.
+        Point 3 isn't bookkeeping. Refunds, disputes and reconciliation all go back to
+        whoever actually moved the money — and the two providers have different id spaces.
+        <strong>Your idempotency key stays yours.</strong>
     </div>
     <aside class="notes">
-        60s. Point 3 links straight back to idempotency and to the ledger in the next
-        section. Say it: switching providers must never mean charging twice.
+        75s. More than one payment provider is normal in Nigerian fintech, not exotic —
+        the room will recognise this instantly.
+        Say it plainly: switching providers must never mean charging twice.
     </aside>
 </section>
 
-<!-- ══════════ UNIT 5 · Atomicity · 6 slides ══════════ -->
-
 <section>
-    <p class="kicker">§4 Databases &middot; <span class="beat">The situation</span></p>
+    <p class="kicker">§4 Databases &middot; <span class="beat">The situation &amp; what broke</span></p>
     <h2>A withdrawal endpoint with a check</h2>
     <pre><code class="language-python">def withdraw(user_id, amount):
     balance = get_balance(user_id)
@@ -683,19 +654,12 @@ def charge(amount, ref):
         raise InsufficientFunds
     debit(user_id, amount)</code></pre>
     <p>Read the balance. Check it. Debit. Four lines, reviewed, tested, obviously correct.</p>
-    <p class="small muted">This is the other half of the negative balance from earlier.</p>
-    <aside class="notes">40s. Everyone in the room has written this function.</aside>
-</section>
-
-<section>
-    <p class="kicker">§4 Databases &middot; <span class="beat">What broke</span></p>
-    <h2>Balances went negative anyway</h2>
-    <p>And not always by accident — <strong>people worked out they could fire two requests
-       at the same moment</strong> and withdraw more than they had.</p>
-    <p class="small muted" style="margin-top: 24px;">In a financial system, concurrency is
-       an attack surface. Somebody will go looking for it.</p>
+    <p><strong>Balances went negative anyway.</strong></p>
+    <p class="small muted">And not always by accident — people worked out they could fire two
+       requests at the same moment and withdraw more than they had. In a financial system,
+       concurrency is an attack surface.</p>
     <aside class="notes">
-        40s. This lands hard with fintech people. Don't rush past it.
+        60s. Everyone in the room has written this function. Let that land before the reveal.
     </aside>
 </section>
 
@@ -734,51 +698,32 @@ ALTER TABLE accounts ADD CONSTRAINT bal_nonneg CHECK (balance >= 0);</code></pre
 
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
-    <h2>The risky part is a balance you mutate</h2>
+    <h2>A balance you mutate, or a ledger you sum</h2>
     <p class="small"><code>balance = balance - amount</code> is a read-modify-write — the race
-       from the last slide, built into your schema. And it keeps <em>what</em> the balance is
-       while losing <em>how it got there</em>.</p>
-    <p class="small">One answer: make the entries the source of truth, and derive the number.</p>
+       from the last slide, baked into your schema. One answer is to make the entries the
+       truth and derive the number:</p>
     <pre><code class="language-sql">INSERT INTO ledger (account_id, amount, reason, idem_key)
 VALUES (42, -4200, 'withdrawal', 'wd:918:2026-08-21');
 
 SELECT SUM(amount) FROM ledger WHERE account_id = 42;</code></pre>
-    <ul class="tight small">
-        <li>Nothing is read-modify-written, so <strong>nothing is lost</strong></li>
-        <li><code>idem_key</code> is unique, so <strong>replays are harmless</strong></li>
-        <li>You get the <strong>audit trail</strong> for free</li>
-    </ul>
-    <aside class="notes">
-        55s. Aside: a logistics app I worked on incremented and decremented counters on
-        every action — races everywhere, same cause.
-        Do NOT present this as a law. The next slide is the cost.
-    </aside>
-</section>
-
-<section>
-    <p class="kicker">§4 Databases &middot; <span class="beat">The trade-off</span></p>
-    <h2>But summing it every time isn't free</h2>
-    <p class="small">Every read now scans every entry that account has ever had. At a few
-       hundred rows, fine. At a few million — on your hottest endpoint, on every page load —
-       that is a real cost, and "just derive it" stops being good advice.</p>
-    <p class="small">So most systems keep both: entries as the truth, a stored number for speed.</p>
+    <p class="small">No lost updates, replays are harmless, and you get an audit trail free.
+       <strong>But summing every read isn't free either</strong> — at a few million entries,
+       on your hottest endpoint, "just derive it" stops being good advice. So most systems
+       keep both:</p>
     <pre><code class="language-sql">BEGIN;
-  INSERT INTO ledger (account_id, amount, reason, idem_key) VALUES (...);
+  INSERT INTO ledger (...) VALUES (...);
   UPDATE accounts SET balance = balance + :amt WHERE id = 42;   -- same transaction
-COMMIT;
-
--- or snapshot periodically, and read: snapshot + entries since
-INSERT INTO balance_snapshots (account_id, as_of_entry_id, balance) VALUES (...);</code></pre>
+COMMIT;</code></pre>
     <div class="note">
-        The rule worth keeping isn't "never store it". It's:
-        <strong>store it if you need the speed — but make sure you can always recompute it
-        from the entries, and run something that checks the two still agree.</strong>
+        The rule isn't "never store it". It's: <strong>store it if you need the speed, but
+        make sure you can always recompute it from the entries — and run something that
+        checks the two still agree.</strong>
     </div>
     <aside class="notes">
-        60s. This is the honest version. A precomputed balance is a cache, and it obeys
-        cache rules: it can drift, so it needs a reconciliation job.
-        Links forward to §5 — that reconciliation check is exactly the kind of invariant
-        worth alerting on.
+        85s. Do not present the ledger as a law — the cost is real.
+        A precomputed balance is a cache and obeys cache rules: it drifts, so it needs a
+        reconciliation job. That check is exactly the invariant to alert on in §5.
+        Aside: a logistics app I worked on incremented counters on every action. Same bug.
     </aside>
 </section>
 
@@ -841,22 +786,13 @@ INSERT INTO balance_snapshots (account_id, as_of_entry_id, balance) VALUES (...)
     </aside>
 </section>
 
-<!-- ══════════ UNIT 6 · Batching & pagination · 4 slides ══════════ -->
-
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">The situation</span></p>
     <h2>Moving 100,000 rows on a live product</h2>
-    <pre><code class="language-text">  old workspace model  ──────▶  new workspace model
-     (people are using it right now)</code></pre>
-    <p class="small">A marketplace connecting creatives to clients. We changed how
-       workspaces were modelled, and every existing one needed rebuilding —
-       about <strong>100,000 rows</strong> — without taking the product down.</p>
-    <aside class="notes">40s.</aside>
-</section>
-
-<section>
-    <p class="kicker">§4 Databases &middot; <span class="beat">What we nearly did</span></p>
-    <h2>What a migration file usually looks like</h2>
+    <p class="small">A marketplace connecting creatives to clients. We changed how workspaces
+       were modelled, and every existing one needed rebuilding — about
+       <strong>100,000 rows</strong> — without taking the product down.</p>
+    <p class="small">The obvious approach is to put it in the migration file:</p>
     <pre><code class="language-sql">-- migrations/0042_add_currency.sql        orders: 2.4 million rows
 
 ALTER TABLE orders ADD COLUMN currency text;                -- instant
@@ -870,12 +806,12 @@ ALTER TABLE orders ALTER COLUMN currency SET NOT NULL;      -- full table scan,
 CREATE UNIQUE INDEX ON orders (reference);                  -- blocks writes for
                                                             -- the whole build</code></pre>
     <p><strong>Four ordinary lines.</strong> One is instant. The other three hold your
-       production database while the deploy sits there waiting.</p>
+       production database while the deploy waits.</p>
     <aside class="notes">
-        60s. Everyone has written this file. That's the point — it isn't reckless code,
-        it's the normal way to write a migration, and it stops being safe at some row count.
-        Nuance if asked: ADD COLUMN with a CONSTANT default is instant on Postgres 11+.
-        A volatile default like gen_random_uuid() still rewrites every row.
+        70s. Everyone has written this file — that's the point. It isn't reckless, it's
+        normal, and it stops being safe at some row count.
+        If asked: ADD COLUMN with a CONSTANT default is instant on Postgres 11+;
+        a volatile default like gen_random_uuid() still rewrites every row.
     </aside>
 </section>
 
@@ -937,61 +873,28 @@ while True:
 </section>
 
 <section>
-    <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
-    <h2>Never move data while people are using it</h2>
-    <pre><code class="language-text">1. EXPAND       add the new column or table — nothing reads it yet
-2. DUAL-WRITE   write both, keep reading the old one
-3. BACKFILL     in batches, resumable, off-peak
-4. CONTRACT     switch reads over, then drop the old one</code></pre>
-    <p class="small">Four deploys instead of one. Each step is independently reversible,
-       and at no point is there a version of the app that can't read the data.</p>
-    <div class="note">
-        For indexes, <code>CREATE INDEX CONCURRENTLY</code> builds without blocking writes.
-        It's slower, it can't run inside a transaction, and a failure leaves an
-        <code>INVALID</code> index you have to drop by hand.
-    </div>
-    <aside class="notes">50s. CUT CANDIDATE if running long — the script slide is the keeper.</aside>
-</section>
-
-<!-- ══════════ UNIT 7 · Observability · 5 slides ══════════ -->
-
-<section>
-    <p class="kicker">§5 Observability &middot; <span class="beat">The situation</span></p>
+    <p class="kicker">§5 Observability &middot; <span class="beat">The situation &amp; what it cost</span></p>
     <h2>An event system made of database triggers</h2>
-    <pre><code class="language-text">   database row changes
-            │
-            ▼
-   cloud function wakes up  ──▶ diff old vs new
-            │                        │
-            ▼                        ▼
-   guess what happened  ──▶  decide what to do next</code></pre>
-    <p class="small">A logistics product — people booking trucks to move shipments from the
-       port. We had no message bus. Instead, functions watched the database for changes and
+    <p class="small">A logistics product — booking trucks to move shipments from the port. We
+       had no message bus. Instead, cloud functions watched the database for changes and
        worked out what had happened by comparing snapshots.</p>
-    <aside class="notes">45s.</aside>
-</section>
-
-<section>
-    <p class="kicker">§5 Observability &middot; <span class="beat">What it cost us</span></p>
-    <h2>Three things we could never do</h2>
+    <pre><code class="language-text">   a row changes ──▶ a function wakes up ──▶ diff old vs new
+                                          ──▶ guess what happened
+                                          ──▶ decide what to do next</code></pre>
     <ol class="tight small">
-        <li><strong>Track anything.</strong> There was no "booking confirmed" anywhere in the
-            system — only a row that used to look one way and now looks another. You cannot
-            count, search or alert on something that was never given a name.</li>
-        <li><strong>Retry anything.</strong> When a function failed, there was nothing to
-            replay. The database change had already happened; the reaction was simply lost,
-            and lost quietly.</li>
-        <li><strong>Add anything safely.</strong> A new feature meant another function
-            diffing the same rows, re-deriving the same meaning — and hoping it didn't
-            collide with the two already doing it.</li>
+        <li><strong>We couldn't track anything.</strong> There was no "booking confirmed" in
+            the system — only a row that used to look one way. You can't count, search or
+            alert on something that was never named.</li>
+        <li><strong>We couldn't retry anything.</strong> A function failed and there was
+            nothing to replay. The change had happened; the reaction was lost, quietly.</li>
+        <li><strong>We couldn't add anything safely.</strong> A new feature meant another
+            function diffing the same rows, hoping it didn't collide with the two already
+            doing it.</li>
     </ol>
-    <div class="note">
-        Debugging meant reconstructing what somebody had <em>intended</em>, from data that
-        had since changed again.
-    </div>
     <aside class="notes">
-        55s. Own it as a mistake — "this is something we built, and it was the wrong call."
-        The room trusts that far more than a list of best practices.
+        75s. Own it as a mistake — "we built this, and it was the wrong call."
+        Debugging meant reconstructing what someone intended, from data that had since
+        changed again.
     </aside>
 </section>
 
@@ -1088,8 +991,6 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
     <aside class="notes">60s. The note pays off the story from unit 3. End of §5 at 27:00.</aside>
 </section>
 
-<!-- ══════════ CLOSE · 2 slides · 3 min ══════════ -->
-
 <section>
     <h2>Seven examples, seven ideas</h2>
     <table>
@@ -1137,6 +1038,15 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
         minScale: 0.2,
         maxScale: 2.0
     });
+
+    // the title slide carries the full logo, so hide the corner mark there
+    const mark = document.querySelector('.conf-mark');
+    const syncMark = () => {
+        const slide = Reveal.getCurrentSlide();
+        mark.style.display = slide && slide.classList.contains('title-slide') ? 'none' : '';
+    };
+    Reveal.on('ready', syncMark);
+    Reveal.on('slidechanged', syncMark);
 </script>
 </body>
 </html>
