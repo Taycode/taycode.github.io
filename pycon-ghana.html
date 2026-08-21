@@ -477,29 +477,28 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">What people try first</span></p>
     <h2>Three ways to stop two runners colliding</h2>
-    <table>
-        <tr><th style="width:20%;">Approach</th><th style="width:38%;">The idea</th><th>Where it still lets you down</th></tr>
-        <tr><td><strong>Pessimistic</strong><br><span class="small muted">a lock</span></td>
-            <td class="small">Take it first, make everyone else wait.
-                <code>redis.lock(...)</code>, or <code>SELECT ... FOR UPDATE</code></td>
-            <td class="small">The holder stalls — GC pause, slow disk — and the TTL expires
-                <em>while the work is still running</em>.</td></tr>
-        <tr><td><strong>Optimistic</strong><br><span class="small muted">a version</span></td>
-            <td class="small">Check at write time.<br>
-                <code>UPDATE ... WHERE version = 7</code><br>0 rows means someone beat you.</td>
-            <td class="small">Protects the row you version. Not the debit you already sent
-                the payment provider.</td></tr>
-        <tr><td><strong>Partitioning</strong><br><span class="small muted">a hash ring</span></td>
-            <td class="small">Never let two nodes want the same row.
-                <code>if ring.owner(id) == me</code></td>
-            <td class="small">Ownership moves when a node joins or leaves. Mid-shuffle, two
-                nodes can both think they own a key.</td></tr>
-    </table>
+    <p class="small muted">Two servers woke up. How do you stop the second one?</p>
+
+    <p><strong>1 &nbsp;·&nbsp; Take a lock</strong> <span class="muted small">— pessimistic</span></p>
+    <pre><code class="language-python">with redis.lock("cron:mandates"):   # only one server gets in
+    process_mandates()</code></pre>
+    <p class="small warn">Stall past the lock's timeout and it expires <em>while you're still working</em>.</p>
+
+    <p style="margin-top:20px;"><strong>2 &nbsp;·&nbsp; Check a version</strong> <span class="muted small">— optimistic</span></p>
+    <pre><code class="language-sql">UPDATE mandates SET status='running' WHERE id=42 AND version=7;
+-- 0 rows updated = someone beat you to it</code></pre>
+    <p class="small warn">Protects the row. Not the debit you already sent the provider.</p>
+
+    <p style="margin-top:20px;"><strong>3 &nbsp;·&nbsp; Split the work</strong> <span class="muted small">— partitioning</span></p>
+    <pre><code class="language-python">if ring.owner(mandate_id) == this_node:   # each node owns a slice
+    process(mandate_id)</code></pre>
+    <p class="small warn">Ownership moves when a node joins or leaves.</p>
+
     <div class="note">
-        Every one of these makes a second run <strong>less likely</strong>.
+        All three make a second run <strong>less likely</strong>.
         None of them makes a second run <strong>safe</strong>.
     </div>
-    <aside class="notes"><p class="narration">Pessimistic locking takes the lock first and makes everyone else wait — but if the holder stalls past the lock TTL, the lock expires while the work is still running. Optimistic locking checks a version at write time and lets the loser retry — but it only protects the row you version, not the charge you already sent to a payment provider. Consistent hashing avoids contention entirely by making one node the owner of each key — but ownership moves whenever a node joins or leaves, and during that shuffle two nodes can both believe they own the same key. All three reduce the odds. None of them changes what is possible.</p>
+    <aside class="notes"><p class="narration">Two servers woke up at midnight. How do you stop the second one? Pessimistic locking takes a lock first and makes everyone else wait — but if the holder stalls past the lock's timeout, the lock expires while it is still working, and now there are two runners and neither knows. Optimistic locking checks a version at the moment you write, and zero rows updated means somebody beat you — but that protects the row you versioned, not the debit you already sent to a payment provider. Partitioning avoids the collision entirely by hashing each job onto a ring so every node owns a slice — but ownership moves whenever a node joins or leaves, and during that shuffle two nodes can both believe they own the same key. Every one of these makes a second run less likely. None of them makes a second run safe.</p>
         <p class="cue">80s. Define each in a line — the room has heard the words, not necessarily used them.
         Consistent hashing: the ring means adding a node reshuffles a slice, not everything.
         Land the last line and pause. The next slide is the answer.
@@ -510,6 +509,7 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">What we did</span></p>
     <h2>Let the database refuse the second one</h2>
+    <p class="small muted">Both crons still fire at midnight. Only one of them debits anybody.</p>
     <pre><code class="language-sql">CREATE UNIQUE INDEX ON mandate_runs (mandate_id, run_date);</code></pre>
     <pre><code class="language-python">@celery.task(bind=True, max_retries=3)
 def process_mandate(self, mandate_id, run_date):
@@ -520,9 +520,11 @@ def process_mandate(self, mandate_id, run_date):
         return "already processed"        # the second server stops here
 
     debit_customer(mandate_id)</code></pre>
-    <p class="small">Two servers, ten servers, or a replay three days later — the row can
-       only exist once, so the debit can only happen once.</p>
-    <aside class="notes"><p class="narration">The guarantee comes from a unique index. Every run of a mandate writes a marker row keyed on the mandate and the date, inside its own transaction. The second server tries to insert the same key, gets an integrity error, and stops before it debits anything. Two servers, ten servers, or a replay three days later — the row can only exist once, so the debit can only happen once. The database enforces this, not the application, and that is the whole point.</p>
+    <pre><code class="language-text">00:00   server A   inserts (918, 2026-08-21)  ──▶ debits
+00:00   server B   IntegrityError              ──▶ stops</code></pre>
+    <p class="small">Two servers, ten servers, or a replay three days later —
+       <strong>the row can only exist once, so the debit can only happen once.</strong></p>
+    <aside class="notes"><p class="narration">This is what actually fixed the two crons. Every run of a mandate writes a marker row keyed on the mandate and the date, inside its own transaction, before any money moves. Both servers still wake up at midnight — server A inserts the row and debits, server B tries to insert the same key, gets an integrity error, and stops. The unique index is doing the work, not the application, and that is the whole point: two servers, ten servers, or a replay three days later, the row can only exist once, so the debit can only happen once.</p>
         <p class="cue">75s. The most important code in the talk. Walk it line by line.
         Stress: the database enforces it, not the application.
         IF CHALLENGED: yes, we mark before we debit — so a crash between the two loses
@@ -698,32 +700,6 @@ ALTER TABLE accounts ADD CONSTRAINT bal_nonneg CHECK (balance >= 0);</code></pre
 </section>
 
 <section>
-    <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
-    <h2>A balance you mutate, or a ledger you sum</h2>
-    <p class="small">One mutable column is what every request fights over — and it keeps
-       <em>what</em> the balance is while losing <em>how it got there</em>.</p>
-    <pre><code class="language-sql">INSERT INTO ledger (account_id, amount, reason, idem_key)
-VALUES (42, -4200, 'withdrawal', 'wd:918:2026-08-21');
-
-SELECT SUM(amount) FROM ledger WHERE account_id = 42;</code></pre>
-    <p class="small">No lost updates &middot; replays harmless &middot; audit trail free.
-       <strong>But summing every read isn't free either.</strong> So most systems keep both:</p>
-    <pre><code class="language-sql">BEGIN;
-  INSERT INTO ledger (...) VALUES (...);
-  UPDATE accounts SET balance = balance + :amt WHERE id = 42;   -- same transaction
-COMMIT;</code></pre>
-    <div class="note">
-        The rule isn't "never store it". It's: <strong>store it if you need the speed —
-        but make sure you can always recompute it, and check that the two agree.</strong>
-    </div>
-    <aside class="notes"><p class="narration">A single mutable balance column is the thing every request contends on, and it tells you what the balance is while losing how it got there. Making the entries the source of truth fixes both: no read-modify-write, so no lost updates; a unique idempotency key, so replays are harmless; and an audit trail you did not have to build. But deriving it is not free either — at a few million entries, on your hottest endpoint, summing every read is a real cost. So most systems keep both, updating the stored balance inside the same transaction as the ledger insert. The rule that matters is not "never store it" — it is that whatever you store must always be recomputable from the entries, with something checking that the two still agree.</p>
-        <p class="cue">85s. Do not present the ledger as a law — the cost is real.
-        A precomputed balance is a cache and obeys cache rules: it drifts, so it needs a
-        reconciliation job. That check is exactly the invariant to alert on in §5.
-        Aside: a logistics app I worked on incremented counters on every action. Same bug.</p></aside>
-</section>
-
-<section>
     <p class="kicker">§4 Databases &middot; <span class="beat">A different system</span></p>
     <h2>What belongs inside a transaction</h2>
     <p class="small muted">Another fintech: every withdrawal sends an SMS.
@@ -742,8 +718,8 @@ COMMIT;</code></pre>
         payload={"id": order.id}))</code></pre></div>
     </div>
     <p><strong>Never hold a lock across a network call you don't control.</strong></p>
-    <p class="small">Writing the <em>intent</em> in the same transaction, and delivering it
-       separately, is the <strong>outbox</strong>.</p>
+    <p class="small">But take it out and the two can now disagree.
+       Writing the <em>intent</em> in the same transaction is the <strong>outbox</strong>.</p>
     <aside class="notes"><p class="narration">Another fintech: every withdrawal fires an SMS, and the money moving and the message going out have to agree. We saw both halves fail separately. A transaction is all-or-nothing, and it holds locks for its entire duration — so a network call inside one means you are holding a row lock for as long as somebody else's server takes to answer. Take it out. But then the two can disagree: the commit succeeds and the message is never queued, or the message goes out and the commit rolls back. Writing the intent into the same transaction, and delivering it separately, is the outbox pattern.</p>
         <p class="cue">60s. We stored every notification so we could replay failures — that was an outbox
         without the name. And a replay is a second execution, so it needs §3's key.</p></aside>
@@ -751,30 +727,47 @@ COMMIT;</code></pre>
 
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
-    <h2>So who actually sends it?</h2>
-    <p class="small">The outbox row is just a row. A <strong>relay</strong> picks it up —
-       one small worker, on a loop.</p>
-    <pre><code class="language-sql">SELECT id, topic, payload FROM outbox
+    <h2>Why the outbox works, and who drains it</h2>
+    <pre><code class="language-text">commit succeeds  ──▶ process dies       ──▶ the SMS is never sent
+SMS sent         ──▶ commit rolls back  ──▶ you told them about money
+                                            that never moved</code></pre>
+    <p class="small">Put the <strong>intent</strong> in the same transaction as the change and
+       those two can never disagree. Delivery becomes a separate problem, with its own retries.</p>
+    <div class="cols">
+        <div>
+            <p class="small good"><strong>A cron that flushes it</strong></p>
+            <pre><code class="language-sql">SELECT id, topic, payload FROM outbox
  WHERE published_at IS NULL
- ORDER BY id
- LIMIT 100
- FOR UPDATE SKIP LOCKED;      -- so several relays can run without fighting</code></pre>
-    <pre><code class="language-python">for row in batch:
-    broker.publish(row.topic, row.payload)     # publish first
-    mark_published(row.id)                     # then mark it done</code></pre>
-    <p class="small">Crash between those two lines and it publishes twice —
-       <strong>which is fine</strong>, because the consumer has an idempotency key.</p>
-    <div class="note">
-        <strong>Not a database trigger</strong> — a trigger runs inside your transaction
-        and can't safely make a network call.
-        At larger scale, swap polling for change data capture (Debezium).
+ ORDER BY id LIMIT 100
+ FOR UPDATE SKIP LOCKED;</code></pre>
+            <pre><code class="language-python">for row in batch:
+    broker.publish(row.topic, row.payload)
+    mark_published(row.id)</code></pre>
+            <p class="small">Every few seconds. No new infrastructure.
+               <code>SKIP LOCKED</code> lets several run at once.</p>
+        </div>
+        <div>
+            <p class="small good"><strong>Change data capture</strong></p>
+            <pre><code class="language-text">   postgres WAL
+        │
+        ▼
+   ┌──────────┐
+   │ Debezium │──▶ broker
+   └──────────┘</code></pre>
+            <p class="small">Tails the replication log instead of polling. Lower latency, no
+               query load — and one more system to operate.</p>
+        </div>
     </div>
-    <aside class="notes"><p class="narration">Everybody says "outbox" and nobody shows the part that actually sends anything. It is a relay: a small worker that selects unpublished rows with FOR UPDATE SKIP LOCKED — which is what lets several relays run at once without fighting over the same rows — publishes each one, then marks it done. The order matters. Publishing before marking means a crash duplicates an event; marking before publishing means a crash loses one. Duplicates are the failure you already handle with idempotency keys, so publish first. And this is deliberately not a database trigger: a trigger runs inside your transaction and cannot safely make a network call. At larger scale you replace the polling with change data capture, where something like Debezium tails the replication log for you.</p>
-        <p class="cue">70s. This is the slide people actually need — everyone says "outbox" and nobody
-        shows the relay.
-        Order matters: publish THEN mark. The other way round loses events instead of
-        duplicating them, and duplicates are the failure you already handle.
-        SKIP LOCKED callback to the tool table earlier.</p></aside>
+    <div class="note">
+        <strong>Publish, then mark.</strong> A crash in between duplicates an event rather
+        than losing one — and duplicates you already handle.
+        <strong>Not a trigger:</strong> a trigger runs inside your transaction and can't
+        safely make a network call.
+    </div>
+    <aside class="notes"><p class="narration">The reason the outbox is worth the trouble is that it removes a whole class of disagreement. Without it, either the commit succeeds and the message is never sent, or the message goes out and the commit rolls back — and you have just told a customer about money that never moved. Writing the intent into the same transaction as the change means the two commit together or not at all. Delivery then becomes a separate problem with its own retries, which is a much easier problem. Draining it has two sensible answers. The simple one is a cron that runs every few seconds, selects unpublished rows with FOR UPDATE SKIP LOCKED so several copies can run without fighting, publishes each row and marks it done — no new infrastructure, and it is genuinely fine for most systems. The scaled-up one is change data capture, where something like Debezium tails the Postgres write-ahead log and publishes for you: lower latency and no polling load, at the cost of another system to operate. Whichever you pick, publish before you mark, so a crash duplicates an event rather than losing one — duplicates are the failure you already handle with idempotency keys. And do not reach for a database trigger: a trigger runs inside your transaction and cannot safely make a network call.</p>
+        <p class="cue">75s. Everyone says "outbox" and nobody shows the part that sends anything.
+        Give the cron version the weight — most of the room does not need Debezium.
+        SKIP LOCKED callback to the tool table in §2.</p></aside>
 </section>
 
 <section>
@@ -961,7 +954,7 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
         <code>SELECT count(*) FROM accounts WHERE balance &lt; 0</code> should be a monitor,
         not a phone call.
     </div>
-    <aside class="notes"><p class="narration">In order of how often they will save you. Queue depth and the age of the oldest message, because that is the earliest signal that work is arriving faster than you drain it — latency alerts fire minutes later. p99 per endpoint, not globally, because a global number hides one bad route. Retry and failure rate per dependency, because rising retries mean a circuit breaker is about to matter. And slow queries sorted by total time rather than average, because a query running a hundred thousand times at twenty milliseconds costs you more than the two-second one you are staring at. And for anything that must never be true — a negative balance, a ledger that disagrees with its cached total — alert on it directly. That should be a monitor, not a phone call from a customer.</p>
+    <aside class="notes"><p class="narration">In order of how often they will save you. Queue depth and the age of the oldest message, because that is the earliest signal that work is arriving faster than you drain it — latency alerts fire minutes later. p99 per endpoint, not globally, because a global number hides one bad route. Retry and failure rate per dependency, because rising retries mean a circuit breaker is about to matter. And slow queries sorted by total time rather than average, because a query running a hundred thousand times at twenty milliseconds costs you more than the two-second one you are staring at. And for anything that must never be true — a negative balance, a total that disagrees with its parts — alert on it directly. That should be a monitor, not a phone call from a customer.</p>
         <p class="cue">60s. The note pays off the second-server story. §5 should end around 28:00.</p></aside>
 </section>
 

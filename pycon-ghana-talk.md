@@ -97,15 +97,15 @@ audience always knows where they are.
 | — | *(interlude)* A daily export run by hand → Airflow; Celery vs Airflow vs Kafka | Picking the tool |
 | 3 | Two servers, one cron, a double debit | Locking (pessimistic, optimistic, partitioning) → idempotency |
 | 4 | A pipeline stalled by one slow third-party API | Backoff, jitter, circuit breakers, provider failover |
-| 5 | A balance that went negative past its check | Atomicity, ledgers vs precomputed balances, transactions |
+| 5 | A balance that went negative past its check | Atomicity, transactions, the outbox |
 | 6 | Backfilling 100k rows on a live product | Batching, keyset pagination |
 | 7 | Cloud functions diffing database snapshots | Named events, percentiles |
 
 ## Status
 
-- [x] Deck built and restructured — `pycon-ghana.html`, **39 slides**
+- [x] Deck built and restructured — `pycon-ghana.html`, **38 slides**
 - [x] Speaker notes with a timing budget on every slide
-- [ ] Timed rehearsal. 39 slides / 30 min ≈ 46s each — plausible, but unproven
+- [ ] Timed rehearsal. 38 slides / 30 min ≈ 46s each — plausible, but unproven
 - [x] Trace IDs restored — folded into the "name the event" slide
 
 Preview: `python3 -m http.server 8000` → <http://localhost:8000/pycon-ghana.html>
