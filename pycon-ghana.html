@@ -113,18 +113,75 @@
        <strong>how much data, arriving how fast, shaped how awkwardly.</strong></p>
     <p style="margin-top: 28px;" class="small">Seven examples, each one teaching one idea:</p>
     <table>
-        <tr><td class="muted">1</td><td>Work that never left the web server</td><td><strong>Decoupling the request cycle</strong></td></tr>
-        <tr><td class="muted">2</td><td>A loop over 3,000 accounts</td><td><strong>Job granularity</strong></td></tr>
+        <tr><td class="muted">1</td><td>A loop over 3,000 accounts</td><td><strong>Job granularity</strong></td></tr>
+        <tr><td class="muted">2</td><td>Work that never left the web server</td><td><strong>Decoupling the request cycle</strong></td></tr>
         <tr><td class="muted">3</td><td>Two servers, one cron job</td><td><strong>Idempotency</strong></td></tr>
         <tr><td class="muted">4</td><td>Everyone retrying at once</td><td><strong>Backoff &amp; circuit breakers</strong></td></tr>
         <tr><td class="muted">5</td><td>A balance that went negative</td><td><strong>Atomicity &amp; transactions</strong></td></tr>
         <tr><td class="muted">6</td><td>Backfilling 100,000 rows live</td><td><strong>Batching &amp; pagination</strong></td></tr>
         <tr><td class="muted">7</td><td>Events we couldn't name</td><td><strong>Observability</strong></td></tr>
     </table>
-    <p class="bridge">Starting with number one — <strong>work that never left the web server.</strong></p>
+    <p class="bridge">Starting with number one — <strong>a loop over three thousand accounts.</strong></p>
     <aside class="notes">
         45s. Agenda by topic. Don't oversell — just walk the right-hand column,
         then hand straight into the first story.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§2 Processing workloads &middot; <span class="beat">The situation</span></p>
+    <h2>Debiting 3,000 accounts at midnight</h2>
+    <p class="small">A savings product. People set up a mandate; every midnight we move money
+       for all of them. This was one of the first things I was asked to fix.</p>
+    <pre><code class="language-python">@cron("0 0 * * *")
+def process_mandates():
+    mandates = Mandate.objects.filter(active=True)   # 3,000 rows in memory
+    results = []
+    for mandate in mandates:
+        results.append(debit_customer(mandate))      # a network call, each time
+    send_summary(results)</code></pre>
+    <ol class="tight small">
+        <li><strong>Blast radius.</strong> Mandate #412 raises, and #413 to #3,000 never run.</li>
+        <li><strong>Retries are all-or-nothing.</strong> Re-run the night and you debit the
+            people who already paid.</li>
+        <li><strong>Memory grows with the data</strong> — every row and every result, held
+            for the whole run.</li>
+        <li><strong>No visibility.</strong> One log line for 3,000 financial operations.</li>
+    </ol>
+    <aside class="notes">
+        70s. Say "three thousand" out loud — it was already hurting at three thousand.
+        Point 4 is the one that actually hurt: support asks what happened to a customer and
+        you cannot answer.
+    </aside>
+</section>
+
+<section>
+    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did &amp; the concept</span></p>
+    <h2>One job per mandate</h2>
+    <pre><code class="language-python">@cron("0 0 * * *")
+def enqueue_mandates():
+    ids = Mandate.objects.filter(active=True).values_list("id", flat=True)
+    for mandate_id in ids:
+        process_mandate.delay(mandate_id)      # 3,000 independent jobs
+
+@celery.task(bind=True, max_retries=3, autoretry_for=(ProviderError,))
+def process_mandate(self, mandate_id):
+    debit_customer(Mandate.objects.get(id=mandate_id))</code></pre>
+    <p class="lead"><strong>Whatever you made a unit of work is the only thing you can
+       retry, observe, or scale.</strong></p>
+    <table>
+        <tr><th>Unit = the whole night</th><th>Unit = one mandate</th></tr>
+        <tr><td>one failure stops everything</td><td>one failure stops one customer</td></tr>
+        <tr><td>retry the whole batch</td><td>retry that one job</td></tr>
+        <tr><td>memory = all rows</td><td>memory = one row</td></tr>
+        <tr><td>one log line</td><td>a job id and status per customer</td></tr>
+    </table>
+    <p class="bridge">That was work trapped inside a <strong>loop</strong>. The next one had already been moved off the request — <strong>or so we thought.</strong></p>
+    <aside class="notes">
+        75s. The cron now only decides WHAT runs; workers do it.
+        End on the bridge — it sets up the next story as a twist, not a repeat.
+        Aside if time: same idea one level up — an ETL pipeline as one big script has the
+        same four problems. Split it into steps and you can re-run step 4 alone.
     </aside>
 </section>
 
@@ -293,66 +350,11 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
         upstream — and <strong>work of different weights needs different queues</strong>,
         or the one-second job waits behind the twenty-minute one.
     </div>
-    <p class="bridge">That was work trapped inside a <strong>request</strong>. The next one is work trapped inside a <strong>loop</strong>.</p>
+    <p class="bridge">Both of those are about <strong>where</strong> work runs. The last one is about <strong>what decides when</strong> it runs.</p>
     <aside class="notes">
         60s. The table pays off the BackgroundTasks slide; the note pays off the other two.
         Closing line: ask where the CPU is, not how quickly you replied.
         Then the bridge — it stops the next story feeling like a fresh start.
-    </aside>
-</section>
-
-<section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">The situation</span></p>
-    <h2>Debiting 3,000 accounts at midnight</h2>
-    <p class="small">A savings product. People set up a mandate; every midnight we move money
-       for all of them. This was one of the first things I was asked to fix.</p>
-    <pre><code class="language-python">@cron("0 0 * * *")
-def process_mandates():
-    mandates = Mandate.objects.filter(active=True)   # 3,000 rows in memory
-    results = []
-    for mandate in mandates:
-        results.append(debit_customer(mandate))      # a network call, each time
-    send_summary(results)</code></pre>
-    <ol class="tight small">
-        <li><strong>Blast radius.</strong> Mandate #412 raises, and #413 to #3,000 never run.</li>
-        <li><strong>Retries are all-or-nothing.</strong> Re-run the night and you debit the
-            people who already paid.</li>
-        <li><strong>Memory grows with the data</strong> — every row and every result, held
-            for the whole run.</li>
-        <li><strong>No visibility.</strong> One log line for 3,000 financial operations.</li>
-    </ol>
-    <aside class="notes">
-        70s. Say "three thousand" out loud — it was already hurting at three thousand.
-        Point 4 is the one that actually hurt: support asks what happened to a customer and
-        you cannot answer.
-    </aside>
-</section>
-
-<section>
-    <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did &amp; the concept</span></p>
-    <h2>One job per mandate</h2>
-    <pre><code class="language-python">@cron("0 0 * * *")
-def enqueue_mandates():
-    ids = Mandate.objects.filter(active=True).values_list("id", flat=True)
-    for mandate_id in ids:
-        process_mandate.delay(mandate_id)      # 3,000 independent jobs
-
-@celery.task(bind=True, max_retries=3, autoretry_for=(ProviderError,))
-def process_mandate(self, mandate_id):
-    debit_customer(Mandate.objects.get(id=mandate_id))</code></pre>
-    <p class="lead"><strong>Whatever you made a unit of work is the only thing you can
-       retry, observe, or scale.</strong></p>
-    <table>
-        <tr><th>Unit = the whole night</th><th>Unit = one mandate</th></tr>
-        <tr><td>one failure stops everything</td><td>one failure stops one customer</td></tr>
-        <tr><td>retry the whole batch</td><td>retry that one job</td></tr>
-        <tr><td>memory = all rows</td><td>memory = one row</td></tr>
-        <tr><td>one log line</td><td>a job id and status per customer</td></tr>
-    </table>
-    <aside class="notes">
-        75s. The cron now only decides WHAT runs; workers do it.
-        Aside if time: same idea one level up — an ETL pipeline as one big script has the
-        same four problems. Split it into steps and you can re-run step 4 alone.
     </aside>
 </section>
 
@@ -1021,8 +1023,8 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
 <section>
     <h2>Seven examples, seven ideas</h2>
     <table>
-        <tr><td class="muted small">Work that never left the web server</td><td><strong>A fast response isn't moved work</strong></td></tr>
         <tr><td class="muted small">A loop over 3,000 accounts</td><td><strong>Granularity is what you can retry and see</strong></td></tr>
+        <tr><td class="muted small">Work that never left the web server</td><td><strong>A fast response isn't moved work</strong></td></tr>
         <tr><td class="muted small">Two servers, one cron</td><td><strong>Assume it runs twice — key it, index it</strong></td></tr>
         <tr><td class="muted small">Everyone retrying at once</td><td><strong>Backoff with jitter, then stop calling</strong></td></tr>
         <tr><td class="muted small">A balance that went negative</td><td><strong>Check and write in one operation</strong></td></tr>

@@ -92,8 +92,8 @@ audience always knows where they are.
 
 | Unit | Example | Concept |
 |---|---|---|
-| 1 | Core + automation server, `BackgroundTasks` under 200k items | Decoupling the request cycle |
-| 2 | The midnight loop over 30,000 mandates | Job granularity |
+| 1 | The midnight loop over 3,000 mandates | Job granularity |
+| 2 | Core / gateway / automation, `BackgroundTasks` under 200k items | Decoupling the request cycle |
 | — | *(interlude)* A daily export run by hand → Airflow; Celery vs Airflow vs Kafka | Picking the tool |
 | 3 | Two servers, one cron, a double debit | Locking (pessimistic, optimistic, partitioning) → idempotency |
 | 4 | A pipeline stalled by one slow third-party API | Backoff, jitter, circuit breakers, provider failover |
