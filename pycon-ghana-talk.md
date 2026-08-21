@@ -111,6 +111,19 @@ audience always knows where they are.
 Preview: `python3 -m http.server 8000` → <http://localhost:8000/pycon-ghana.html>
 Press **S** for speaker notes, **Esc** for the slide grid.
 
+## Two audiences
+
+The deck is built to work twice over:
+
+- **On stage** — slides carry diagrams, code and short fragments. Nothing on a
+  slide is a sentence you would read aloud.
+- **Online** — every slide has a `narration` paragraph in its speaker notes.
+  Press **R**, click *Show narration*, or open `?read` and it renders inline,
+  so a stranger gets the full argument without you in the room.
+
+Speaker notes are split: `.narration` is the prose (shown to readers),
+`.cue` is timing and delivery direction (never shown).
+
 ## Slide budget
 
 | Section | Slides | Minutes |

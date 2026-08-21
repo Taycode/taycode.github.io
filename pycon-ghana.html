@@ -50,6 +50,26 @@
         .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
         .cols pre { font-size: 0.44em; }
 
+        /* reading mode — narration shown inline for people who find this online */
+        .read-toggle {
+            position: fixed; left: 18px; bottom: 16px; z-index: 1100;
+            font: 600 12px/1 -apple-system, system-ui, sans-serif; letter-spacing: .06em;
+            text-transform: uppercase; color: #cfe6f7; cursor: pointer;
+            background: rgba(66,175,250,0.16); border: 1px solid rgba(66,175,250,0.45);
+            border-radius: 999px; padding: 9px 15px;
+        }
+        .read-toggle:hover { background: rgba(66,175,250,0.3); }
+        .reveal .slides section .notes { display: none; }
+        body.reading-mode .reveal .slides section .notes {
+            display: block; margin-top: 22px; padding: 14px 18px;
+            border-left: 4px solid #42affa; background: rgba(66,175,250,0.08);
+            font-size: 0.66em; line-height: 1.55; color: #c8d4dc; text-align: left;
+        }
+        body.reading-mode .reveal .slides section .notes .cue { display: none; }
+        body.reading-mode .reveal .slides section .notes p { margin: 0 0 10px; }
+        body.reading-mode .reveal .slides section .notes p:last-child { margin-bottom: 0; }
+        .reading-hint { font-size: 0.5em; color: #6f6f6f; margin-top: 26px; }
+
         .bridge {
             margin-top: 22px; padding-top: 12px; font-size: 0.76em;
             color: #7d7d7d; font-style: italic;
@@ -72,6 +92,7 @@
     </style>
 </head>
 <body>
+<button id="readToggle" class="read-toggle">Show narration</button>
 <div class="reveal">
     <img class="conf-mark" src="assets/images/pycon-ghana-2026.png" alt="PyCon Ghana 2026">
 <div class="slides">
@@ -85,25 +106,26 @@
         <strong>Abdulmateen Tairu</strong> (@taycode)
     </p>
     <img class="conf-logo" src="assets/images/pycon-ghana-2026.png" alt="PyCon Ghana 2026">
-    <aside class="notes">0:00 · 10s.</aside>
+    <p class="reading-hint">Reading this online? Press <strong>R</strong>, or use the button
+       in the corner, to show the narration that goes with each slide.</p>
+    <aside class="notes"><p class="narration">This is the deck from a thirty-minute talk at PyCon Ghana 2026. It walks through seven systems I worked on that broke in production — a savings fintech, an AI data pipeline, a logistics product, a creatives marketplace — and what each failure taught. Nothing here broke at Google scale: the numbers are three thousand users, thirty thousand users, a hundred thousand rows. The narration you are reading is what I say out loud over each slide.</p>
+        <p class="cue">0:00 · 10s.</p></aside>
 </section>
 
 <section>
     <h2>Where these examples come from</h2>
     <ul class="tight small">
-        <li>A <strong>web activity pipeline</strong> — scraping and classifying the pages users visit</li>
-        <li>A <strong>savings fintech</strong> — 3,000 → 30,000 users, roughly ₦1bn processed in a year</li>
-        <li>Two and a half years of <strong>ETL pipelines</strong> — Airflow, millions of rows</li>
-        <li>A <strong>unified inbox SaaS</strong> — processing millions of messages from
-            different social channels, for both B2B and B2C, in Germany and Austria</li>
+        <li><strong>Web activity pipeline</strong> — scraping and classifying pages</li>
+        <li><strong>Savings fintech</strong> — 3,000 → 30,000 users &middot; ~₦1bn a year</li>
+        <li><strong>ETL pipelines</strong> — Airflow, millions of rows, 2½ years</li>
+        <li><strong>Unified inbox SaaS</strong> — millions of messages, B2B and B2C,
+            Germany and Austria</li>
     </ul>
-    <p style="margin-top: 26px;">Every example in this talk is something that broke in production,
-       at a scale most of us are already at.</p>
-    <p class="small muted">Not Google scale. Thirty thousand users.</p>
-    <aside class="notes">
-        30s. This is the whole bio. The last line matters — it tells the room these
-        problems are closer than they think.
-    </aside>
+    <p class="lead" style="margin-top: 30px;"><strong>Not Google scale.</strong>
+       Thirty thousand users.</p>
+    <aside class="notes"><p class="narration">Everything in this talk broke in production. And none of it broke at Google scale — the numbers you are about to see are three thousand users, thirty thousand users, a hundred thousand rows. These problems arrive far earlier than most people expect.</p>
+        <p class="cue">30s. This is the whole bio. The last line matters — it tells the room these
+        problems are closer than they think.</p></aside>
 </section>
 
 <section>
@@ -122,17 +144,16 @@
         <tr><td class="muted">7</td><td>Events we couldn't name</td><td><strong>Observability</strong></td></tr>
     </table>
     <p class="bridge">Starting with number one — <strong>a loop over three thousand accounts.</strong></p>
-    <aside class="notes">
-        45s. Agenda by topic. Don't oversell — just walk the right-hand column,
-        then hand straight into the first story.
-    </aside>
+    <aside class="notes"><p class="narration">Data-intensive does not mean big. It means your bottleneck is the data rather than the logic — not how much this computes, but how much data there is, how fast it arrives, and how awkwardly it is shaped. Almost nobody's application is CPU-bound; the business logic is usually fine. What follows is seven examples, each teaching one idea, and they arrive in the order they tend to find you.</p>
+        <p class="cue">45s. Agenda by topic. Don't oversell — just walk the right-hand column,
+        then hand straight into the first story.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">The situation</span></p>
     <h2>Debiting 3,000 accounts at midnight</h2>
-    <p class="small">A savings product. People set up a mandate; every midnight we move money
-       for all of them. This was one of the first things I was asked to fix.</p>
+    <p class="small muted">A savings product. Every midnight, we move money for everyone
+       who set up a mandate.</p>
     <pre><code class="language-python">@cron("0 0 * * *")
 def process_mandates():
     mandates = Mandate.objects.filter(active=True)   # 3,000 rows in memory
@@ -141,18 +162,15 @@ def process_mandates():
         results.append(debit_customer(mandate))      # a network call, each time
     send_summary(results)</code></pre>
     <ol class="tight small">
-        <li><strong>Blast radius.</strong> Mandate #412 raises, and #413 to #3,000 never run.</li>
-        <li><strong>Retries are all-or-nothing.</strong> Re-run the night and you debit the
-            people who already paid.</li>
-        <li><strong>Memory grows with the data</strong> — every row and every result, held
-            for the whole run.</li>
-        <li><strong>No visibility.</strong> One log line for 3,000 financial operations.</li>
+        <li><strong>Blast radius</strong> — #412 raises, and #413 to #3,000 never run</li>
+        <li><strong>Retries are all-or-nothing</strong> — re-running debits whoever already paid</li>
+        <li><strong>Memory grows with the data</strong> — every row, every result, held all night</li>
+        <li><strong>No visibility</strong> — one log line for 3,000 financial operations</li>
     </ol>
-    <aside class="notes">
-        70s. Say "three thousand" out loud — it was already hurting at three thousand.
+    <aside class="notes"><p class="narration">A savings product: people set up a mandate saying how much to save and how often, and every midnight a cron job moved the money for all of them. It had run this way for years, and it was one of the first things I was asked to fix after joining. The problem is not the code — it is that the entire night is a single unit of work.</p>
+        <p class="cue">70s. Say "three thousand" out loud — it was already hurting at three thousand.
         Point 4 is the one that actually hurt: support asks what happened to a customer and
-        you cannot answer.
-    </aside>
+        you cannot answer.</p></aside>
 </section>
 
 <section>
@@ -177,32 +195,28 @@ def process_mandate(self, mandate_id):
         <tr><td>one log line</td><td>a job id and status per customer</td></tr>
     </table>
     <p class="bridge">That was work trapped inside a <strong>loop</strong>. The next one had already been moved off the request — <strong>or so we thought.</strong></p>
-    <aside class="notes">
-        75s. The cron now only decides WHAT runs; workers do it.
+    <aside class="notes"><p class="narration">The fix is to change what a unit of work is. The cron no longer does anything except decide what should run — it enqueues one job per mandate and stops. A worker picks up each one independently. Now a single failure fails a single customer, retries happen per mandate and automatically, memory is one row at a time, and every customer has a job id and a status you can look up. That is the general lesson: whatever you made a unit of work is the only thing you can retry, observe, or scale. The same idea applies one level up — an ETL pipeline written as one big script has these exact four problems, and splitting it into steps is what lets you re-run step four without redoing one through three.</p>
+        <p class="cue">75s. The cron now only decides WHAT runs; workers do it.
         End on the bridge — it sets up the next story as a twist, not a repeat.
         Aside if time: same idea one level up — an ETL pipeline as one big script has the
-        same four problems. Split it into steps and you can re-run step 4 alone.
-    </aside>
+        same four problems. Split it into steps and you can re-run step 4 alone.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">The situation</span></p>
     <h2>The work was a workflow, not a job</h2>
-    <p class="small">We built data pipelines for other companies. Company A comes to us with
-       <strong>50,000 raw support conversations</strong> and wants them cleaned and labelled
-       so they can train a model on them.</p>
+    <p class="small muted">Company A: <strong>50,000 raw support conversations</strong>,
+       to be cleaned and labelled for training.</p>
     <pre><code class="language-text">   step 1   ingest the client's export        millions of rows
    step 2   strip names, emails, card numbers  slow, and must not fail quietly
    step 3   auto-label with a model            expensive
    step 4   send the unsure ones to reviewers  humans, so: hours or days
    step 5   package it and hand it back        big files, cloud storage</code></pre>
-    <p class="small">Every client has a different sequence. Some skip step 3. Some run step 4
-       twice. <strong>The sequence is the product</strong> — so it lives in one place, and the
-       work lives in another.</p>
-    <aside class="notes">
-        55s. Concrete beats abstract — a real client asking for a real thing.
-        Plant this: steps differ per client, and they take wildly different amounts of time.
-    </aside>
+    <p>Every client has a different sequence.
+       <strong>The sequence is the product.</strong></p>
+    <aside class="notes"><p class="narration">We built data pipelines for other companies. A client arrives with fifty thousand raw support conversations and wants them cleaned and labelled so they can train a model. That is not one job — it is a sequence of steps, and each step costs something completely different. Some clients skip a step, some run one twice. Because the sequence differs per client, it lives in one service and the work lives in another.</p>
+        <p class="cue">55s. Concrete beats abstract — a real client asking for a real thing.
+        Plant this: steps differ per client, and they take wildly different amounts of time.</p></aside>
 </section>
 
 <section>
@@ -215,41 +229,33 @@ def process_mandate(self, mandate_id):
 │ owns the │                                                        │
 │ sequence │◀──────────── HTTP callback ────────────────────────────┘
 └──────────┘         "step 3 done, 812 flagged"</code></pre>
-    <p class="small">Core publishes "run step 3" to Kafka. The gateway consumes it and turns
-       it into an HTTP request. Automation does the work and calls core back. Core reads the
-       result, decides step 4 is next, and publishes again.</p>
+
     <div class="note">
         Kafka sits between core and the gateway. But the hop that matters —
         <strong>gateway to automation — is a synchronous HTTP call.</strong>
-        The gateway waits for an answer.
     </div>
-    <aside class="notes">
-        60s. Trace all four hops with your hand.
+    <aside class="notes"><p class="narration">Core publishes "run step 3" to Kafka. The gateway consumes that message and turns it into an HTTP request. Automation does the work, then calls core back over HTTP. Core reads the result, decides step 4 is next, and publishes again — round and round until the workflow is finished. Note where the queue is: between core and the gateway. The gateway then waits, synchronously, for automation to answer.</p>
+        <p class="cue">60s. Trace all four hops with your hand.
         Plant the last line hard — the queue is early in the chain and the expensive work is
-        two hops past it. That is the whole failure, and nobody sees it coming.
-    </aside>
+        two hops past it. That is the whole failure, and nobody sees it coming.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">What broke</span></p>
     <h2>Then core started batching</h2>
-    <p class="small">Core went from publishing about <strong>10 messages a second</strong> to
-       dropping <strong>200,000 onto Kafka at once</strong>.</p>
+    <p><strong>10 messages a second &nbsp;→&nbsp; 200,000 at once.</strong></p>
     <pre><code class="language-text">core ──▶ Kafka ──▶ gateway ──▶ automation
           200,000     drains      200,000 synchronous
           messages    flat out    HTTP requests</code></pre>
     <ul class="tight small">
-        <li>Kafka took the burst without blinking — that's its job</li>
-        <li>The gateway drained it as fast as it could, turning every message into an HTTP call</li>
-        <li>Automation's CPU pinned at 100%, and it began <strong>restarting in a loop</strong></li>
-        <li>The gateway's requests timed out — and <strong>the callbacks core was waiting
-            on were never sent</strong></li>
+        <li>Kafka absorbed the burst — that's its job</li>
+        <li>The gateway drained flat out, one HTTP call per message</li>
+        <li>Automation pinned at 100% CPU and <strong>restarted in a loop</strong></li>
+        <li><strong>The callbacks core was waiting on were never sent</strong></li>
     </ul>
-    <p class="small muted">Core was now waiting on answers that were never coming.</p>
-    <aside class="notes">
-        55s. Last bullet is the sting: the failure fed itself, because the callbacks
-        travelled the same broken path.
-    </aside>
+    <aside class="notes"><p class="narration">Core changed from a trickle to a flood — around two hundred thousand messages onto Kafka at once. Kafka handled it perfectly, which is exactly what a log is for. The gateway then drained that backlog as fast as it could and turned every single message into a synchronous HTTP call. Automation saturated, restarted, and started dropping requests — including the callbacks core needed to advance the workflow. The failure fed itself, because the callbacks travelled the same broken path.</p>
+        <p class="cue">55s. Last bullet is the sting: the failure fed itself, because the callbacks
+        travelled the same broken path.</p></aside>
 </section>
 
 <section>
@@ -269,11 +275,10 @@ def auto_label(req: StepRequest, bg: BackgroundTasks):
         <strong>We had Kafka, and it didn't save us.</strong> A queue only protects the hop
         it sits in front of. Ours was two hops upstream of the work.
     </div>
-    <aside class="notes">
-        60s. Precise: sync `def` tasks run in Starlette's threadpool, `async def` on the
+    <aside class="notes"><p class="narration">Here is the code that caused it. FastAPI's BackgroundTasks looks like the fix — you return a 202 immediately and the work happens after the response is sent. But it happens in the same process. A synchronous handler gets Starlette's threadpool, an async one runs on the event loop; either way it is the same CPU and the same memory that is supposed to be accepting the gateway's requests, and nothing survives a restart. We had made the response fast. We had not moved the work. And the sting is that we already had Kafka — it just sat two hops upstream of the expensive part. A queue only protects the hop it sits in front of.</p>
+        <p class="cue">60s. Precise: sync `def` tasks run in Starlette's threadpool, `async def` on the
         event loop — either way, same process, nothing survives a restart.
-        The note is the real lesson of this unit. Land it slowly.
-    </aside>
+        The note is the real lesson of this unit. Land it slowly.</p></aside>
 </section>
 
 <section>
@@ -300,18 +305,16 @@ def label_conversations(self, project_id, batch_id):
     <p class="small">The gateway's call now returns in milliseconds, so it stops mattering how
        fast it drains Kafka. And <strong>the callback comes from the worker that actually did
        the work</strong> — the only thing that knows when it's really finished.</p>
-    <aside class="notes">
-        65s. Two moves: the synchronous hop got cheap, and the callback moved to the worker.
-        Concurrency is now a number we set, not whatever the load happens to be.
-    </aside>
+    <aside class="notes"><p class="narration">Two changes. Automation now does nothing but validate the request, hand the job to Celery, and return — about five milliseconds — so it no longer matters how fast the gateway drains Kafka. And the callback moved to the worker, because the worker is the only thing that actually knows when the work has finished. Note the two arrows going back into core: the 202 means "I have accepted this", and the callback means "it is done". Those are different statements, and the old design conflated them.</p>
+        <p class="cue">65s. Two moves: the synchronous hop got cheap, and the callback moved to the worker.
+        Concurrency is now a number we set, not whatever the load happens to be.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§2 Processing workloads &middot; <span class="beat">What we did next</span></p>
     <h2>Not every step costs the same</h2>
-    <p class="small">One queue meant every step queued behind every other step.
-       <strong>Stripping PII takes a second. Labelling a batch takes minutes.</strong>
-       Put them in the same line and the quick job waits an hour for no reason.</p>
+    <p class="small"><strong>Stripping PII takes a second. Labelling takes minutes.</strong>
+       One queue, and the quick job waits behind the slow one.</p>
     <pre><code class="language-python">celery_app.conf.task_routes = {
     "tasks.label_conversations": {"queue": "heavy"},   # CPU-bound, minutes
     "tasks.package_dataset":     {"queue": "heavy"},   # big files, lots of memory
@@ -320,15 +323,13 @@ def label_conversations(self, project_id, batch_id):
 }</code></pre>
     <pre><code class="language-text">queue: heavy   ──▶  a few large instances      celery -Q heavy -c 4
 queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code></pre>
-    <p class="small">Heavy work got a few big machines. Light work got many small shared ones.
-       And the two <strong>scale independently</strong> — a labelling backlog adds heavy
-       workers without touching anything else.</p>
-    <aside class="notes">
-        60s. Say the shape of the problem first: head-of-line blocking. A one-second job
+    <p class="small">Two pools, <strong>scaled independently</strong> — a labelling backlog
+       adds heavy workers and touches nothing else.</p>
+    <aside class="notes"><p class="narration">Once everything was on a queue, a second problem appeared: all the steps shared one. Stripping personal data from a batch takes about a second. Labelling a batch takes minutes. On a single queue the quick job sits behind the slow one — head-of-line blocking — and the whole system reads as "slow". So we split the queues by how expensive the work is, and gave each queue its own pool: a few large machines for the heavy work, many small shared ones for the light work.</p>
+        <p class="cue">60s. Say the shape of the problem first: head-of-line blocking. A one-second job
         stuck behind a twenty-minute job is pure waste, and it looks like "the system is slow".
         This is the same isolation idea as bulkheads in the next section — but here it's
-        about matching the machine to the work, not just keeping failures apart.
-    </aside>
+        about matching the machine to the work, not just keeping failures apart.</p></aside>
 </section>
 
 <section>
@@ -351,11 +352,10 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
         or the one-second job waits behind the twenty-minute one.
     </div>
     <p class="bridge">Both of those are about <strong>where</strong> work runs. The last one is about <strong>what decides when</strong> it runs.</p>
-    <aside class="notes">
-        60s. The table pays off the BackgroundTasks slide; the note pays off the other two.
+    <aside class="notes"><p class="narration">Moving work out of a request needs five things, and BackgroundTasks gives you exactly one of them: the fast response. No separate process, no bound on concurrency, no retries, and nothing survives a restart. The question worth asking is not how quickly you replied — it is where the CPU is. And two things it took an outage to learn: a queue only protects the hop it sits in front of, and work of different weights needs different queues, or your one-second job waits behind a twenty-minute one.</p>
+        <p class="cue">60s. The table pays off the BackgroundTasks slide; the note pays off the other two.
         Closing line: ask where the CPU is, not how quickly you replied.
-        Then the bridge — it stops the next story feeling like a fresh start.
-    </aside>
+        Then the bridge — it stops the next story feeling like a fresh start.</p></aside>
 </section>
 
 <section>
@@ -374,9 +374,9 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
               │  laptop  │──▶ cloud
               └──────────┘</code></pre>
             <ul class="tight small">
-                <li>On leave, sick, or forgot — no export that day</li>
-                <li>Nobody knew until someone downstream asked</li>
-                <li>A failure halfway meant starting over, by hand</li>
+                <li>On leave, sick, forgot — no export</li>
+                <li>Nobody knew until someone asked</li>
+                <li>A half-failure meant starting over, by hand</li>
             </ul>
         </div>
         <div>
@@ -389,19 +389,18 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
              │ validate │─▶│ upload │
              └──────────┘  └────────┘</code></pre>
             <ul class="tight small">
-                <li>Schedule lives in the repo, not in someone's memory</li>
-                <li>Each step retries alone — a failed upload doesn't redo the extract</li>
-                <li>Slack when it finishes, louder when it doesn't</li>
-                <li>Every run has a history you can open</li>
+                <li>Schedule lives in the repo, not a memory</li>
+                <li>Each step retries alone</li>
+                <li>Slack when it finishes — louder when it doesn't</li>
+                <li>Every run has a history</li>
             </ul>
         </div>
     </div>
-    <aside class="notes">
-        70s. The "before" here isn't bad code — it's a person. Ask how many people have a
+    <aside class="notes"><p class="narration">Before Airflow, a daily export was a person: at a set time somebody ran a script on their own machine, took the file, and uploaded it. If they were travelling or ill or simply forgot, there was no export that day, and nobody found out until someone downstream came asking. Moving it to an Airflow DAG did not just automate it — it gave us a schedule in version control, retries per step, alerting, and a history of every run. A task queue could have run the work. It could not have given us any of the rest.</p>
+        <p class="cue">70s. The "before" here isn't bad code — it's a person. Ask how many people have a
         script like this. Hands go up.
         A task queue could have run the work; it couldn't have given us the schedule, the
-        ordered steps, the per-step retry, or the history.
-    </aside>
+        ordered steps, the per-step retry, or the history.</p></aside>
 </section>
 
 <section>
@@ -420,11 +419,10 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
         dependency graphs out of Celery chains, or running Kafka where a table would do.
     </div>
     <p class="bridge">Everything so far pushes work <strong>off the critical path</strong> — into queues, workers, schedulers. Which means it now runs somewhere you are not watching. And sometimes it runs <strong>twice</strong>.</p>
-    <aside class="notes">
-        60s. Say the microservices line here: splitting services buys you isolation and
+    <aside class="notes"><p class="narration">Pick by the question you are answering, not by the tool's reputation. If you need work run now and independently, that is a task queue. If you need ordered steps on a schedule with the ability to re-run step four on its own, that is an orchestrator. If you need messages routed to workers and consumed once, that is a broker. If you need many consumers reading the same stream with the ability to replay from last Tuesday, that is a log. And if you have Postgres and thirty thousand users, a table with FOR UPDATE SKIP LOCKED is very often the right answer. Most of the pain I have seen came from bending one of these into another. One more thing: splitting into microservices buys you isolation and independent scaling, and it also buys you every problem in the next two sections — so choose it on purpose.</p>
+        <p class="cue">60s. Say the microservices line here: splitting services buys you isolation and
         independent scaling, and buys you every problem in the next two sections.
-        Choose it on purpose.
-    </aside>
+        Choose it on purpose.</p></aside>
 </section>
 
 <section>
@@ -446,39 +444,34 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
             supposed to make that impossible</li>
         <li>We found out because <strong>a customer told us</strong></li>
     </ul>
-    <aside class="notes">
-        70s. Nobody wrote a bug — the config did exactly what it said.
-        Be honest about the detection failure; it sets up §5 and the room respects it.
-    </aside>
+    <aside class="notes"><p class="narration">The savings product grew, so we scaled the way everyone scales — another instance behind the load balancer. The deploy image carried the cron with it, so at midnight two servers woke up and both processed every mandate. Money left accounts twice. One balance went negative, past a check that was supposed to make that impossible. And we did not detect any of it — a customer told us.</p>
+        <p class="cue">70s. Nobody wrote a bug — the config did exactly what it said.
+        Be honest about the detection failure; it sets up §5 and the room respects it.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">Why it broke</span></p>
     <h2>Why the same work runs twice</h2>
-    <p class="small">A queue normally hands a message to exactly one worker, and most days
-       that is exactly what happens. But what it <em>guarantees</em> is <strong>at least
-       once</strong> — not exactly once. The gap shows up at failure boundaries.</p>
+    <p class="small">Queues guarantee <strong>at least once</strong> — not exactly once.
+       The gap shows up at failure boundaries:</p>
     <ol class="tight small">
-        <li><strong>A retry after a timeout.</strong> The call actually went through — you
-            just never got the answer. <span class="muted">This is the common one.</span></li>
-        <li><strong>A worker dies after the work, before the acknowledgement.</strong> The
-            broker never heard "done", so it gives the message to someone else.</li>
-        <li><strong>A webhook is redelivered.</strong> WhatsApp, Instagram and Stripe all
-            document this — you don't get to opt out.</li>
-        <li><strong>Two schedulers fire the same job.</strong>
+        <li><strong>A retry after a timeout</strong> — it went through, you never heard back
+            <span class="muted">← the common one</span></li>
+        <li><strong>A worker dies before it acknowledges</strong> — the broker re-delivers</li>
+        <li><strong>A webhook is redelivered</strong> — WhatsApp, Instagram, Stripe all document this</li>
+        <li><strong>Two schedulers fire the same job</strong>
             <span class="muted">← what happened to us</span></li>
-        <li><strong>The client sends it twice</strong> — a double-click, or its own retry.</li>
+        <li><strong>The client sends it twice</strong> — a double-click, or its own retry</li>
     </ol>
     <div class="note">
-        Most days, none of this happens. That's the trap: <strong>"most days" isn't a
-        guarantee</strong>, and here it is somebody's money.
+        Most days none of this happens. That's the trap —
+        <strong>"most days" isn't a guarantee</strong>, and here it is somebody's money.
     </div>
-    <aside class="notes">
-        65s. Be precise — do NOT claim queues duplicate constantly, because they don't,
+    <aside class="notes"><p class="narration">This is the part people get wrong in both directions. A queue does not duplicate constantly — most days it hands each message to exactly one worker, and that is what happens. But the guarantee it makes is at-least-once, not exactly-once, and the gap opens at failure boundaries. The most common cause by far is a retry after a timeout, where the call actually succeeded and you simply never got the answer. Webhook providers redeliver by design. And in our case, two schedulers fired the same job. The argument is not frequency, it is consequence: rare is fine for a thumbnail cache and not fine for a debit.</p>
+        <p class="cue">65s. Be precise — do NOT claim queues duplicate constantly, because they don't,
         and someone in the room knows it. The argument is rarity vs. consequence:
         rare is fine for a thumbnail cache, and not fine for a debit.
-        Next slide covers what people reach for to prevent it.
-    </aside>
+        Next slide covers what people reach for to prevent it.</p></aside>
 </section>
 
 <section>
@@ -506,13 +499,12 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
         Every one of these makes a second run <strong>less likely</strong>.
         None of them makes a second run <strong>safe</strong>.
     </div>
-    <aside class="notes">
-        80s. Define each in a line — the room has heard the words, not necessarily used them.
+    <aside class="notes"><p class="narration">Pessimistic locking takes the lock first and makes everyone else wait — but if the holder stalls past the lock TTL, the lock expires while the work is still running. Optimistic locking checks a version at write time and lets the loser retry — but it only protects the row you version, not the charge you already sent to a payment provider. Consistent hashing avoids contention entirely by making one node the owner of each key — but ownership moves whenever a node joins or leaves, and during that shuffle two nodes can both believe they own the same key. All three reduce the odds. None of them changes what is possible.</p>
+        <p class="cue">80s. Define each in a line — the room has heard the words, not necessarily used them.
         Consistent hashing: the ring means adding a node reshuffles a slice, not everything.
         Land the last line and pause. The next slide is the answer.
         If asked "so are locks useless?" — no. Use them to avoid wasted work. Just don't use
-        them as your correctness guarantee.
-    </aside>
+        them as your correctness guarantee.</p></aside>
 </section>
 
 <section>
@@ -530,20 +522,18 @@ def process_mandate(self, mandate_id, run_date):
     debit_customer(mandate_id)</code></pre>
     <p class="small">Two servers, ten servers, or a replay three days later — the row can
        only exist once, so the debit can only happen once.</p>
-    <aside class="notes">
-        75s. The most important code in the talk. Walk it line by line.
+    <aside class="notes"><p class="narration">The guarantee comes from a unique index. Every run of a mandate writes a marker row keyed on the mandate and the date, inside its own transaction. The second server tries to insert the same key, gets an integrity error, and stops before it debits anything. Two servers, ten servers, or a replay three days later — the row can only exist once, so the debit can only happen once. The database enforces this, not the application, and that is the whole point.</p>
+        <p class="cue">75s. The most important code in the talk. Walk it line by line.
         Stress: the database enforces it, not the application.
         IF CHALLENGED: yes, we mark before we debit — so a crash between the two loses
         that debit rather than duplicating it. That is the trade we chose: never charge
-        twice, and reconcile the gaps. The opposite order duplicates instead.
-    </aside>
+        twice, and reconcile the gaps. The opposite order duplicates instead.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">The concept</span></p>
     <h2>Idempotency, and where the key comes from</h2>
-    <p class="small"><em>Idempotent</em> — running it twice leaves the same result as
-       running it once.</p>
+    <p class="small"><em>Idempotent</em> — running it twice leaves the same result as once.</p>
     <pre><code class="language-python">key = str(uuid4())                     # new key every attempt — useless
 key = f"{mandate_id}:{run_date}"       # same key every attempt</code></pre>
     <p><strong>Derive the key from the work, not from the attempt.</strong></p>
@@ -556,21 +546,19 @@ key = f"{mandate_id}:{run_date}"       # same key every attempt</code></pre>
             <li>a fresh UUID</li><li>the hostname or retry count</li></ul></div>
     </div>
     <div class="note">
-        Some work is idempotent for free: <code>SET balance = 5000</code>, an upsert, a
-        delete by id. Never free: <code>balance = balance + 500</code>, append, send, charge.
+        Free: <code>SET balance = 5000</code>, upsert, delete by id.
+        Never free: <code>balance = balance + 500</code>, append, send, charge.
     </div>
-    <aside class="notes">
-        60s. Webhooks hand you a free key — the provider's message id. Most immediately
-        useful slide in the talk.
-    </aside>
+    <aside class="notes"><p class="narration">Idempotent means running something twice leaves the same result as running it once. The part people get wrong is the key. If you generate a fresh UUID on each attempt, every retry looks like new work and the index never fires. The key has to be derived from the work itself — the mandate and the date, the order id, or the message id a webhook provider hands you for free. Anything containing a timestamp, a hostname or a retry count is not a key, it is a serial number.</p>
+        <p class="cue">60s. Webhooks hand you a free key — the provider's message id. Most immediately
+        useful slide in the talk.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">The situation &amp; what broke</span></p>
     <h2>A pipeline leaning on somebody else's API</h2>
-    <p class="small">A web activity tracker: users' apps send a URL, a worker fetches the page
-       and asks a third-party service to classify it. <strong>Every job makes that call.</strong>
-       One afternoon the service got slow — not down, just slow.</p>
+    <p class="small muted">A URL enrichment pipeline. <strong>Every job calls a third-party
+       API.</strong> One afternoon it got slow — <strong>not down, just slow.</strong></p>
     <pre><code class="language-python">for attempt in range(5):
     try:
         return classify(url)
@@ -580,13 +568,11 @@ key = f"{mandate_id}:{run_date}"       # same key every attempt</code></pre>
 t+1s   every worker retries at the same instant  ──▶ more load, slower still
 t+2s   every worker retries at the same instant  ──▶ it starts returning errors
 t+3s   every worker retries at the same instant  ──▶ ...</code></pre>
-    <p class="small">Every worker failed together, waited the <strong>same fixed second</strong>,
-       and came back together. And each one sat blocked in <code>sleep</code>, so
-       <strong>our own queue backed up</strong> behind an outage we were helping cause.</p>
-    <aside class="notes">
-        75s. Name it once: the thundering herd.
-        "Not down, just slow" is what makes retrying feel like the reasonable thing to do.
-    </aside>
+    <p class="small">Same fixed second, so every client comes back <strong>together</strong>.
+       And each worker sits blocked in <code>sleep</code> — <strong>our own queue backs up too.</strong></p>
+    <aside class="notes"><p class="narration">A web activity tracker: a user's app sends a URL, a worker fetches the page and asks a third-party service to classify what it is about. Every single job makes that call. One afternoon the service slowed down — not down, just slow, which is exactly what makes retrying feel reasonable. Our retry loop waited a fixed one second between attempts, so every worker failed at roughly the same moment and came back at exactly the same moment. We turned a wobble into an outage. And because each worker sat blocked inside sleep, our own queue backed up behind an outage we were helping to cause.</p>
+        <p class="cue">75s. Name it once: the thundering herd.
+        "Not down, just slow" is what makes retrying feel like the reasonable thing to do.</p></aside>
 </section>
 
 <section>
@@ -605,9 +591,8 @@ def enrich_url(self, url, user_id):
     <pre><code class="language-text">                    1s          2s              4s
 without jitter   ████████    ████████        ████████     every client, together
 with jitter      ██ ▌ █▌   ▌██  ██ ▌      █ ▌██   ▌██     spread across the window</code></pre>
-    <aside class="notes">
-        55s. Four flags, one decorator — very portable. Jitter is the part people skip.
-    </aside>
+    <aside class="notes"><p class="narration">Four flags on one decorator. Exponential backoff gives the dependency room to recover. Jitter randomises the wait so clients desynchronise instead of returning in lockstep — this is the part people skip, and it is the part that actually breaks the herd. The cap stops a task retrying for three days. And autoretry_for matters: retry a 500, never retry a 400, because a bad request will be bad every time.</p>
+        <p class="cue">55s. Four flags, one decorator — very portable. Jitter is the part people skip.</p></aside>
 </section>
 
 <section>
@@ -617,19 +602,15 @@ with jitter      ██ ▌ █▌   ▌██  ██ ▌      █ ▌██   
    ▲                      │                  │
    └──────success─────────┴───one probe──────┘</code></pre>
     <ul class="tight small">
-        <li><strong>Circuit breaker.</strong> Once you know it's down, stop calling.
-            Fail immediately instead of burning a worker for 30 seconds —
-            <strong>or send the work to a different provider.</strong></li>
-        <li><strong>Timeouts on every network call.</strong> <code>requests</code> defaults
-            to <em>no timeout</em> — one hung socket holds a worker forever.</li>
-        <li><strong>A separate queue per dependency.</strong> A backed-up SMS provider must
-            not stop payments from processing.</li>
+        <li><strong>Circuit breaker</strong> — once you know it's down, stop calling.
+            Fail fast, or route elsewhere.</li>
+        <li><strong>Timeouts on every network call</strong> — <code>requests</code> defaults
+            to <em>none</em>. One hung socket holds a worker forever.</li>
+        <li><strong>A queue per dependency</strong> — a stuck SMS provider must not stop
+            payments.</li>
     </ul>
-    <div class="note">
-        We split notifications into their own service for exactly that last reason —
-        so a stuck provider couldn't take the core product down with it.
-    </div>
-    <aside class="notes">55s. §3 should end around 18:30.</aside>
+    <aside class="notes"><p class="narration">Three things, in order of how often they save you. A circuit breaker means that once you know a service is down you stop calling it — failing immediately instead of burning a worker for a thirty-second timeout. Timeouts on every network call, because the requests library defaults to no timeout at all and one hung socket holds a worker forever. And a separate queue per dependency, so a backed-up SMS provider cannot stop payments from processing. We split notifications into their own service for exactly that reason — we just did not have the word "bulkhead" for it at the time.</p>
+        <p class="cue">55s. §3 should end around 18:30.</p></aside>
 </section>
 
 <section>
@@ -643,26 +624,24 @@ with jitter      ██ ▌ █▌   ▌██  ██ ▌      █ ▌██   
         record(ref, provider=provider.name, external_id=result.id)
         return result
     raise AllProvidersDown</code></pre>
-    <p class="small">This only works if you built for it <em>before</em> the outage:</p>
+    <p class="small">Only works if you built for it <em>before</em> the outage:</p>
     <ol class="tight small">
-        <li><strong>One interface, many adapters.</strong> The moment business logic says
-            <code>if provider == "x"</code>, failover has stopped being switchable.</li>
-        <li><strong>Normalise on the way back in.</strong> Two providers will not agree on
-            what "pending" means. That translation is your job, at the edge.</li>
+        <li><strong>One interface, many adapters</strong> — no
+            <code>if provider == "x"</code> in business logic</li>
+        <li><strong>Normalise on the way back in</strong> — they won't agree on what
+            "pending" means</li>
         <li><strong>Record who processed what</strong> — their name, and <em>their</em>
-            reference id.</li>
+            reference id</li>
     </ol>
     <div class="note">
-        Point 3 isn't bookkeeping. Refunds, disputes and reconciliation all go back to
-        whoever actually moved the money — and the two providers have different id spaces.
+        Point 3 isn't bookkeeping — refunds and disputes go back to whoever moved the money.
         <strong>Your idempotency key stays yours.</strong>
     </div>
     <p class="bridge">Retries, replays, failovers — every one of them means the same work reaching your data <strong>more than once</strong>. So the data has to survive it.</p>
-    <aside class="notes">
-        75s. More than one payment provider is normal in Nigerian fintech, not exotic —
+    <aside class="notes"><p class="narration">Failing fast is good; failing over is better, when someone else can do the work. In Nigerian fintech, having more than one payment provider is normal rather than exotic. But failover only works if you built for it beforehand: one interface with many adapters, so business logic never branches on which provider answered; normalised responses, because two providers will never agree on what "pending" means; and a record of which provider processed each transaction, with their reference id. That last one is not bookkeeping — refunds, disputes and reconciliation all go back to whoever actually moved the money, and the two providers have completely different id spaces. Your idempotency key stays yours.</p>
+        <p class="cue">75s. More than one payment provider is normal in Nigerian fintech, not exotic —
         the room will recognise this instantly.
-        Say it plainly: switching providers must never mean charging twice.
-    </aside>
+        Say it plainly: switching providers must never mean charging twice.</p></aside>
 </section>
 
 <section>
@@ -678,9 +657,8 @@ with jitter      ██ ▌ █▌   ▌██  ██ ▌      █ ▌██   
     <p class="small muted">And not always by accident — people worked out they could fire two
        requests at the same moment and withdraw more than they had. In a financial system,
        concurrency is an attack surface.</p>
-    <aside class="notes">
-        60s. Everyone in the room has written this function. Let that land before the reveal.
-    </aside>
+    <aside class="notes"><p class="narration">Read the balance, check it, debit. Four lines, reviewed, tested, and obviously correct. Balances went negative anyway — and not always by accident. People worked out that if they fired two withdrawal requests at the same instant they could take out more than they had. In a financial system, concurrency is an attack surface, and somebody will go looking for it.</p>
+        <p class="cue">60s. Everyone in the room has written this function. Let that land before the reveal.</p></aside>
 </section>
 
 <section>
@@ -699,7 +677,8 @@ with jitter      ██ ▌ █▌   ▌██  ██ ▌      █ ▌██   
        account holding ₦5,000.</p>
     <p class="small muted">This is a race condition: the result depends on the order two
        things happen to interleave.</p>
-    <aside class="notes">60s. Walk the interleaving slowly, line by line. Juniors need the pace.</aside>
+    <aside class="notes"><p class="narration">Two requests read the same balance of five thousand. Both check it against a forty-two hundred withdrawal, and both pass, because at the moment each of them looked, the money was there. Then both apply their decrement. Eight thousand four hundred leaves an account that held five thousand. Neither request did anything wrong on its own — the bug lives in the gap between the read and the write. That gap is what a race condition is.</p>
+        <p class="cue">60s. Walk the interleaving slowly, line by line. Juniors need the pace.</p></aside>
 </section>
 
 <section>
@@ -714,45 +693,41 @@ acct = db.query(Account).filter_by(id=uid).with_for_update().one()</code></pre>
 ALTER TABLE accounts ADD CONSTRAINT bal_nonneg CHECK (balance >= 0);</code></pre>
     <p class="small">The single statement is the right default. The constraint costs nothing
        and saves you when someone adds a new code path next year.</p>
-    <aside class="notes">60s.</aside>
+    <aside class="notes"><p class="narration">Three ways to close the gap. The single conditional UPDATE is the right default: the check and the write happen in one statement, and zero rows updated means declined. SELECT FOR UPDATE holds the row while you decide, which is useful when the decision is more complicated than one comparison. And a CHECK constraint costs nothing and is the one that saves you in two years, when somebody adds a code path that forgets the other two.</p>
+        <p class="cue">60s.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
     <h2>A balance you mutate, or a ledger you sum</h2>
-    <p class="small">A single mutable balance column is the thing every request fights
-       over, and it keeps <em>what</em> the balance is while losing <em>how it got there</em>.
-       One answer is to make the entries the truth and derive the number:</p>
+    <p class="small">One mutable column is what every request fights over — and it keeps
+       <em>what</em> the balance is while losing <em>how it got there</em>.</p>
     <pre><code class="language-sql">INSERT INTO ledger (account_id, amount, reason, idem_key)
 VALUES (42, -4200, 'withdrawal', 'wd:918:2026-08-21');
 
 SELECT SUM(amount) FROM ledger WHERE account_id = 42;</code></pre>
-    <p class="small">No lost updates, replays are harmless, and you get an audit trail free.
-       <strong>But summing every read isn't free either</strong> — at a few million entries,
-       on your hottest endpoint, "just derive it" stops being good advice. So most systems
-       keep both:</p>
+    <p class="small">No lost updates &middot; replays harmless &middot; audit trail free.
+       <strong>But summing every read isn't free either.</strong> So most systems keep both:</p>
     <pre><code class="language-sql">BEGIN;
   INSERT INTO ledger (...) VALUES (...);
   UPDATE accounts SET balance = balance + :amt WHERE id = 42;   -- same transaction
 COMMIT;</code></pre>
     <div class="note">
-        The rule isn't "never store it". It's: <strong>store it if you need the speed, but
-        make sure you can always recompute it from the entries — and run something that
-        checks the two still agree.</strong>
+        The rule isn't "never store it". It's: <strong>store it if you need the speed —
+        but make sure you can always recompute it, and check that the two agree.</strong>
     </div>
-    <aside class="notes">
-        85s. Do not present the ledger as a law — the cost is real.
+    <aside class="notes"><p class="narration">A single mutable balance column is the thing every request contends on, and it tells you what the balance is while losing how it got there. Making the entries the source of truth fixes both: no read-modify-write, so no lost updates; a unique idempotency key, so replays are harmless; and an audit trail you did not have to build. But deriving it is not free either — at a few million entries, on your hottest endpoint, summing every read is a real cost. So most systems keep both, updating the stored balance inside the same transaction as the ledger insert. The rule that matters is not "never store it" — it is that whatever you store must always be recomputable from the entries, with something checking that the two still agree.</p>
+        <p class="cue">85s. Do not present the ledger as a law — the cost is real.
         A precomputed balance is a cache and obeys cache rules: it drifts, so it needs a
         reconciliation job. That check is exactly the invariant to alert on in §5.
-        Aside: a logistics app I worked on incremented counters on every action. Same bug.
-    </aside>
+        Aside: a logistics app I worked on incremented counters on every action. Same bug.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">A different system</span></p>
     <h2>What belongs inside a transaction</h2>
-    <p class="small">Another fintech. Every withdrawal sends an SMS, and the money moving and
-       the message going out have to agree — <strong>we saw both halves fail, separately.</strong></p>
+    <p class="small muted">Another fintech: every withdrawal sends an SMS.
+       <strong>We saw both halves fail, separately.</strong></p>
     <div class="cols">
         <div><p class="small warn"><strong>Locked for someone else's outage</strong></p>
             <pre><code class="language-python">with db.begin():
@@ -766,22 +741,19 @@ COMMIT;</code></pre>
         topic="order.paid",
         payload={"id": order.id}))</code></pre></div>
     </div>
-    <p class="small">A transaction is all-or-nothing — and it holds locks the whole time.
-       <strong>Never hold one across a network call you don't control.</strong></p>
-    <p class="small">Writing the <em>intent</em> in the same transaction, then delivering it
-       separately, is the <strong>outbox</strong>. One atomic write; the email or the event
-       goes out after.</p>
-    <aside class="notes">
-        60s. We stored every notification so we could replay failures — that was an outbox
-        without the name. And a replay is a second execution, so it needs §3's key.
-    </aside>
+    <p><strong>Never hold a lock across a network call you don't control.</strong></p>
+    <p class="small">Writing the <em>intent</em> in the same transaction, and delivering it
+       separately, is the <strong>outbox</strong>.</p>
+    <aside class="notes"><p class="narration">Another fintech: every withdrawal fires an SMS, and the money moving and the message going out have to agree. We saw both halves fail separately. A transaction is all-or-nothing, and it holds locks for its entire duration — so a network call inside one means you are holding a row lock for as long as somebody else's server takes to answer. Take it out. But then the two can disagree: the commit succeeds and the message is never queued, or the message goes out and the commit rolls back. Writing the intent into the same transaction, and delivering it separately, is the outbox pattern.</p>
+        <p class="cue">60s. We stored every notification so we could replay failures — that was an outbox
+        without the name. And a replay is a second execution, so it needs §3's key.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
     <h2>So who actually sends it?</h2>
-    <p class="small">The outbox row is just a row. Something has to pick it up — a
-       <strong>relay</strong>: a small worker doing one thing, on a loop.</p>
+    <p class="small">The outbox row is just a row. A <strong>relay</strong> picks it up —
+       one small worker, on a loop.</p>
     <pre><code class="language-sql">SELECT id, topic, payload FROM outbox
  WHERE published_at IS NULL
  ORDER BY id
@@ -790,31 +762,26 @@ COMMIT;</code></pre>
     <pre><code class="language-python">for row in batch:
     broker.publish(row.topic, row.payload)     # publish first
     mark_published(row.id)                     # then mark it done</code></pre>
-    <p class="small">Crash between those two lines and it publishes again — which is
-       <strong>at-least-once, and fine</strong>, because the consumer already has an
-       idempotency key.</p>
+    <p class="small">Crash between those two lines and it publishes twice —
+       <strong>which is fine</strong>, because the consumer has an idempotency key.</p>
     <div class="note">
-        <strong>Not a database trigger.</strong> A trigger runs inside your transaction and
-        can't safely make a network call — you'd be holding a lock open across the broker.
-        At larger scale, swap polling for change data capture: Debezium tails Postgres'
-        replication log and publishes for you. Lower latency, more moving parts.
+        <strong>Not a database trigger</strong> — a trigger runs inside your transaction
+        and can't safely make a network call.
+        At larger scale, swap polling for change data capture (Debezium).
     </div>
-    <aside class="notes">
-        70s. This is the slide people actually need — everyone says "outbox" and nobody
+    <aside class="notes"><p class="narration">Everybody says "outbox" and nobody shows the part that actually sends anything. It is a relay: a small worker that selects unpublished rows with FOR UPDATE SKIP LOCKED — which is what lets several relays run at once without fighting over the same rows — publishes each one, then marks it done. The order matters. Publishing before marking means a crash duplicates an event; marking before publishing means a crash loses one. Duplicates are the failure you already handle with idempotency keys, so publish first. And this is deliberately not a database trigger: a trigger runs inside your transaction and cannot safely make a network call. At larger scale you replace the polling with change data capture, where something like Debezium tails the replication log for you.</p>
+        <p class="cue">70s. This is the slide people actually need — everyone says "outbox" and nobody
         shows the relay.
         Order matters: publish THEN mark. The other way round loses events instead of
         duplicating them, and duplicates are the failure you already handle.
-        SKIP LOCKED callback to the tool table earlier.
-    </aside>
+        SKIP LOCKED callback to the tool table earlier.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">The situation</span></p>
     <h2>Moving 100,000 rows on a live product</h2>
-    <p class="small">A marketplace connecting creatives to clients. We changed how workspaces
-       were modelled, and every existing one needed rebuilding — about
-       <strong>100,000 rows</strong> — without taking the product down.</p>
-    <p class="small">The obvious approach is to put it in the migration file:</p>
+    <p class="small muted">A creatives marketplace. New workspace model,
+       <strong>100,000 rows to rebuild</strong>, product live throughout.</p>
     <pre><code class="language-sql">-- migrations/0042_workspace_v2.sql        workspaces: 100,000 rows
 
 ALTER TABLE workspaces ADD COLUMN owner_id bigint;             -- instant
@@ -829,41 +796,35 @@ CREATE UNIQUE INDEX ON workspaces (slug);                      -- blocks writes 
                                                                -- the whole build</code></pre>
     <p><strong>Four ordinary lines.</strong> One is instant. The other three hold your
        production database while the deploy waits.</p>
-    <aside class="notes">
-        70s. Everyone has written this file — that's the point. It isn't reckless, it's
+    <aside class="notes"><p class="narration">A marketplace connecting creatives with clients. We changed how workspaces were modelled, and every existing workspace needed rebuilding — around a hundred thousand rows — while people were using the product. The obvious approach is to put it all in the migration file, and that file looks completely ordinary. One of those four statements is instant. The other three will hold your production database while the deploy sits there waiting.</p>
+        <p class="cue">70s. Everyone has written this file — that's the point. It isn't reckless, it's
         normal, and it stops being safe at some row count.
         If asked: ADD COLUMN with a CONSTANT default is instant on Postgres 11+;
-        a volatile default like gen_random_uuid() still rewrites every row.
-    </aside>
+        a volatile default like gen_random_uuid() still rewrites every row.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">Why it breaks things</span></p>
     <h2>A slow migration doesn't just run slowly</h2>
     <ul class="tight small">
-        <li><strong>It's one transaction.</strong> Every row that <code>UPDATE</code> touches
-            stays locked until the entire migration commits — not until that statement
-            finishes.</li>
-        <li><strong>Some of it blocks readers too.</strong> <code>SET NOT NULL</code> and
-            table rewrites take <code>ACCESS EXCLUSIVE</code>: no writes, and no reads either.</li>
-        <li><strong>Locks queue, and the queue is the real killer.</strong> Your migration
-            waits behind whatever long query is already running — and every request that
-            arrives after it waits behind your migration.</li>
+        <li><strong>It's one transaction</strong> — rows stay locked until the whole
+            migration commits, not until that statement finishes</li>
+        <li><strong>Some of it blocks readers too</strong> — <code>SET NOT NULL</code> takes
+            <code>ACCESS EXCLUSIVE</code>: no writes, no reads</li>
+        <li><strong>Locks queue — and that's the real killer.</strong> You wait behind a long
+            query; everything else waits behind you</li>
     </ul>
     <pre><code class="language-sql">SET lock_timeout = '3s';   -- fail fast instead of building a queue behind you</code></pre>
     <div class="note">
-        <strong>Migrations change structure, and they should be quick.</strong>
-        Moving data is a separate job — one that runs in batches, can be paused, and can be
-        resumed. Don't put a hundred-thousand-row <code>UPDATE</code> in a file your deploy
-        is waiting on.
+        <strong>Migrations change structure, and should be quick.</strong>
+        Moving data is a separate job — batched, pausable, resumable.
     </div>
-    <aside class="notes">
-        65s. The queue point is the one people haven't thought about: a migration that only
+    <aside class="notes"><p class="narration">Three reasons. It runs in one transaction, so every row the UPDATE touches stays locked until the whole migration commits, not until that statement finishes. Some of it blocks readers as well as writers — SET NOT NULL and table rewrites take an ACCESS EXCLUSIVE lock. And the one people have not thought about: locks queue. Your migration waits behind whatever long-running query is already there, and every request arriving afterwards waits behind your migration. A migration that only needs two hundred milliseconds can still stall the site for a minute purely because of what it got stuck behind. Setting a lock_timeout makes it fail fast instead of building that queue.</p>
+        <p class="cue">65s. The queue point is the one people haven't thought about: a migration that only
         needs 200ms can still stall the site for a minute, because of what it got stuck
         behind and what piled up behind it.
         Gentler NOT NULL if asked: ADD CONSTRAINT ... CHECK (col IS NOT NULL) NOT VALID,
-        then VALIDATE CONSTRAINT — that takes a much weaker lock.
-    </aside>
+        then VALIDATE CONSTRAINT — that takes a much weaker lock.</p></aside>
 </section>
 
 <section>
@@ -882,44 +843,38 @@ while True:
     log.info("backfill.progress", extra={"last_id": last_id})
     time.sleep(0.1)                                    # leave room for users</code></pre>
     <div class="note">
-        <strong>Why <code>id > last_id</code> and not <code>OFFSET</code>:</strong>
-        <code>LIMIT 1000 OFFSET 90000</code> makes Postgres fetch and throw away 90,000 rows
-        to hand you 1,000 — so every batch is slower than the one before it. Keyset paging
-        is an index seek: batch 900 costs the same as batch 1.
+        <strong>Why <code>id > last_id</code>, not <code>OFFSET</code>:</strong>
+        <code>OFFSET 90000</code> makes Postgres fetch and discard 90,000 rows to hand you
+        1,000. Keyset paging is an index seek — batch 900 costs what batch 1 did.
     </div>
     <p class="small">A dozen lines, and every one of them is a pattern from earlier in this talk.</p>
     <p class="bridge">Queues, keys, locks, batches — <strong>every one of them is invisible</strong> until something measures it.</p>
-    <aside class="notes">
-        65s. Point at each comment: bounded memory and batching (§2), safe restart (§3),
+    <aside class="notes"><p class="narration">This is the whole talk on one screen, and that is not a coincidence. It pages by keyset rather than OFFSET, so batch nine hundred costs what batch one did. It holds a thousand rows at a time, so memory is bounded. Each batch is its own short transaction. A checkpoint makes it safe to kill and restart. It logs progress, so you can see how far it got. And it sleeps briefly between batches to leave room for the people actually using the product.</p>
+        <p class="cue">65s. Point at each comment: bounded memory and batching (§2), safe restart (§3),
         short transaction and keyset paging (§4), visible progress (§5).
-        Say it out loud — that isn't a coincidence.
-    </aside>
+        Say it out loud — that isn't a coincidence.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§5 Observability &middot; <span class="beat">The situation &amp; what it cost</span></p>
     <h2>An event system made of database triggers</h2>
-    <p class="small">A logistics product — booking trucks to move shipments from the port. We
-       had no message bus. Instead, cloud functions watched the database for changes and
-       worked out what had happened by comparing snapshots.</p>
+    <p class="small muted">A logistics product. No message bus — cloud functions watched the
+       database and <strong>guessed what had happened by diffing snapshots.</strong></p>
     <pre><code class="language-text">   a row changes ──▶ a function wakes up ──▶ diff old vs new
                                           ──▶ guess what happened
                                           ──▶ decide what to do next</code></pre>
     <ol class="tight small">
-        <li><strong>We couldn't track anything.</strong> There was no "booking confirmed" in
-            the system — only a row that used to look one way. You can't count, search or
-            alert on something that was never named.</li>
-        <li><strong>We couldn't retry anything.</strong> A function failed and there was
-            nothing to replay. The change had happened; the reaction was lost, quietly.</li>
-        <li><strong>We couldn't add anything safely.</strong> A new feature meant another
-            function diffing the same rows, hoping it didn't collide with the two already
-            doing it.</li>
+        <li><strong>Couldn't track anything</strong> — there was no "booking confirmed",
+            only a row that used to look different</li>
+        <li><strong>Couldn't retry anything</strong> — nothing to replay. The reaction was
+            lost, quietly</li>
+        <li><strong>Couldn't add anything safely</strong> — a new feature meant another
+            function diffing the same rows</li>
     </ol>
-    <aside class="notes">
-        75s. Own it as a mistake — "we built this, and it was the wrong call."
+    <aside class="notes"><p class="narration">A logistics product — people booking trucks to move shipments from the port. We had no message bus, so instead cloud functions watched the database for changes and worked out what had happened by comparing the old row to the new one. This was a mistake we made, and it cost us three things. We could not track anything, because there was no "booking confirmed" anywhere in the system — only a row that used to look different, and you cannot count or alert on something that was never named. We could not retry anything, because when a function failed there was nothing to replay; the change had already happened and the reaction was simply lost. And we could not add anything safely, because every new feature meant another function diffing the same rows, hoping it did not collide with the two already doing it.</p>
+        <p class="cue">75s. Own it as a mistake — "we built this, and it was the wrong call."
         Debugging meant reconstructing what someone intended, from data that had since
-        changed again.
-    </aside>
+        changed again.</p></aside>
 </section>
 
 <section>
@@ -936,30 +891,23 @@ while True:
         ▼         ▼         ▼          ▼
      notify    invoice   analytics   audit log</code></pre>
     <ul class="tight small">
-        <li><strong>Easier to track.</strong> The name is searchable, countable, alertable.
-            "How many bookings were confirmed today" becomes a query instead of an
-            archaeology project.</li>
-        <li><strong>Easier to retry.</strong> The event is a record. A consumer failed?
-            Replay it — which is exactly why it needs the idempotency key from earlier.</li>
-        <li><strong>Easier to build.</strong> A new feature is a new consumer. Nothing that
-            already works has to be touched.</li>
-        <li><strong>Easier to follow.</strong> Give the event an id and carry it into every
-            consumer and every task argument — then one booking is traceable end to end,
-            across services, in structured logs you can actually query.</li>
+        <li><strong>Easier to track</strong> — the name is searchable, countable, alertable</li>
+        <li><strong>Easier to retry</strong> — the event is a record, so replay it</li>
+        <li><strong>Easier to build</strong> — a new feature is just a new consumer</li>
+        <li><strong>Easier to follow</strong> — give it an id, carry the id everywhere,
+            and one booking is traceable end to end</li>
     </ul>
-    <aside class="notes">
-        60s. Land this: we already had the outbox from the last section available to us.
-        An outbox row IS a named event. We just never thought of it that way.
-    </aside>
+    <aside class="notes"><p class="narration">Give the thing a name, publish it deliberately, and let anyone who cares subscribe. The name makes it searchable, countable and alertable — "how many bookings were confirmed today" becomes a query rather than an archaeology project. The event is a record, so a failed consumer can replay it, which is exactly why it needs the idempotency key from earlier. A new feature becomes a new consumer, and nothing that already works has to change. And giving each event an id you carry into every consumer and every task argument is what makes one booking traceable end to end across services. The sting is that we already had the outbox available to us — an outbox row is a named event. We just never thought of it that way.</p>
+        <p class="cue">60s. Land this: we already had the outbox from the last section available to us.
+        An outbox row IS a named event. We just never thought of it that way.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§5 Observability &middot; <span class="beat">What we couldn't see</span></p>
     <h2>"The dashboard says it's fine"</h2>
-    <p class="small">A customer says the app is slow. You open the dashboard. Average
-       response time: <strong>80ms</strong>. Green across the board. You tell them it looks
-       fine on your end.</p>
-    <p class="small"><strong>You are both telling the truth.</strong></p>
+    <p class="small">A customer says the app is slow. The dashboard says
+       <strong>80ms average</strong>. Green everywhere.</p>
+    <p><strong>You are both telling the truth.</strong></p>
     <pre><code class="language-text">1,000 requests
 
     999  took     50 ms
@@ -968,11 +916,10 @@ while True:
    mean          80 ms      ← what the dashboard showed you</code></pre>
     <p>The average is real. It just describes a request that <strong>never happened
        to anybody</strong>.</p>
-    <aside class="notes">
-        50s. Tell it as the conversation — customer says slow, dashboard says fine.
+    <aside class="notes"><p class="narration">A customer says the app is slow. You open the dashboard, see eighty milliseconds average, everything green, and tell them it looks fine on your end. You are both telling the truth. Nine hundred and ninety-nine requests took fifty milliseconds and one took thirty seconds, which averages to eighty. The mean is real — it just describes a request that never happened to anybody.</p>
+        <p class="cue">50s. Tell it as the conversation — customer says slow, dashboard says fine.
         Everyone in the room has been on one side of it.
-        One outlier in a thousand moved the mean from 50ms to 80ms and stayed invisible.
-    </aside>
+        One outlier in a thousand moved the mean from 50ms to 80ms and stayed invisible.</p></aside>
 </section>
 
 <section>
@@ -990,34 +937,32 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
    →  roughly 1 in 4.</code></pre>
     <p><strong>p99 is not your unluckiest customer. It is a quarter of your traffic.</strong>
        Alert on it.</p>
-    <aside class="notes">
-        60s. This is the number that makes the point — say it slowly.
+    <aside class="notes"><p class="narration">Line every request up from fastest to slowest. p50 is the middle one. p99 means ninety-nine out of a hundred were faster than this. The intuition people have is that p99 affects one percent of users, so who cares. But one page load in a real app makes something like thirty API calls, and for that page to feel fast all thirty have to land in the quick ninety-nine percent. Zero point nine nine to the power of thirty is about zero point seven four — so roughly a quarter of page loads hit the slow path. p99 is not your unluckiest customer. It is a quarter of your traffic.</p>
+        <p class="cue">60s. This is the number that makes the point — say it slowly.
         The intuition people have is "p99 = 1% of users, so who cares".
         The maths says the opposite as soon as one page makes many calls.
-        If asked: 10 calls -> 10%, 30 calls -> 26%, 50 calls -> 40%.
-    </aside>
+        If asked: 10 calls -> 10%, 30 calls -> 26%, 50 calls -> 40%.</p></aside>
 </section>
 
 <section>
     <p class="kicker">§5 Observability &middot; <span class="beat">What to watch</span></p>
     <h2>Four things worth instrumenting</h2>
     <ol class="tight small">
-        <li><strong>Queue depth and oldest-message age.</strong> The earliest signal that work
-            is arriving faster than you drain it. Latency alerts fire minutes later.</li>
-        <li><strong>p99 latency per endpoint.</strong> A global p99 hides one bad route.</li>
-        <li><strong>Retry and failure rate per dependency.</strong> Rising retries mean a
-            circuit breaker is about to matter.</li>
-        <li><strong>Slow queries by <em>total</em> time, not average.</strong> A query running
-            100,000 times at 20ms costs more than the 2-second one you're staring at.</li>
+        <li><strong>Queue depth &amp; oldest-message age</strong> — the earliest signal.
+            Latency alerts fire minutes later</li>
+        <li><strong>p99 per endpoint</strong> — a global p99 hides one bad route</li>
+        <li><strong>Retry &amp; failure rate per dependency</strong> — rising retries mean a
+            breaker is about to matter</li>
+        <li><strong>Slow queries by <em>total</em> time, not average</strong> — 100k × 20ms
+            beats the 2-second one you're staring at</li>
     </ol>
     <div class="note">
         And whatever must never be true — <strong>alert on it.</strong>
         <code>SELECT count(*) FROM accounts WHERE balance &lt; 0</code> should be a monitor,
-        not something a customer tells you.
+        not a phone call.
     </div>
-    <aside class="notes">
-        60s. The note pays off the second-server story. §5 should end around 28:00.
-    </aside>
+    <aside class="notes"><p class="narration">In order of how often they will save you. Queue depth and the age of the oldest message, because that is the earliest signal that work is arriving faster than you drain it — latency alerts fire minutes later. p99 per endpoint, not globally, because a global number hides one bad route. Retry and failure rate per dependency, because rising retries mean a circuit breaker is about to matter. And slow queries sorted by total time rather than average, because a query running a hundred thousand times at twenty milliseconds costs you more than the two-second one you are staring at. And for anything that must never be true — a negative balance, a ledger that disagrees with its cached total — alert on it directly. That should be a monitor, not a phone call from a customer.</p>
+        <p class="cue">60s. The note pays off the second-server story. §5 should end around 28:00.</p></aside>
 </section>
 
 <section>
@@ -1034,7 +979,8 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
     <p class="small" style="margin-top: 24px;">None of these were exotic failures. Every one
        of them was ordinary code that had been working, meeting more data than it was
        written for.</p>
-    <aside class="notes">70s. Read the right-hand column. That's the whole talk.</aside>
+    <aside class="notes"><p class="narration">None of these were exotic failures. Every one of them was ordinary code — reviewed, tested, working — that met more data than it was written for. The left column is what happened; the right column is what it was actually about. Get expensive work out of the request cycle and out of the giant loop. Assume everything runs twice and let a unique index enforce that, rather than a lock or hope. Back off with jitter and stop calling a service you know is down. Never hold a database lock across a network call. And measure p99, queue depth, and the things that must never be true.</p>
+        <p class="cue">70s. Read the right-hand column. That's the whole talk.</p></aside>
 </section>
 
 <section class="title-slide">
@@ -1042,10 +988,9 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
     <p style="margin-top: 40px;"><strong>Abdulmateen Tairu</strong><br>
        <span class="muted">@taycode</span></p>
     <p class="small muted" style="margin-top: 36px;">Questions?</p>
-    <aside class="notes">
-        Q&amp;A prompts you can seed if the room is quiet:
-        "has anyone here run a cron on two servers?" — or the sockets-vs-HTTP story.
-    </aside>
+    <aside class="notes"><p class="narration">Thanks for reading. The talk was given at PyCon Ghana 2026. If you want to argue with any of it, or you have a story of your own that fits one of these shapes, I am @taycode.</p>
+        <p class="cue">Q&amp;A prompts you can seed if the room is quiet:
+        "has anyone here run a cron on two servers?" — or the sockets-vs-HTTP story.</p></aside>
 </section>
 
 </div>
@@ -1076,6 +1021,22 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
     };
     Reveal.on('ready', syncMark);
     Reveal.on('slidechanged', syncMark);
+
+    // Reading mode: reveal the narration inline, hide the stage cues.
+    const btn = document.getElementById('readToggle');
+    const setRead = (on) => {
+        document.body.classList.toggle('reading-mode', on);
+        btn.textContent = on ? 'Hide narration' : 'Show narration';
+        try { localStorage.setItem('deckNarration', on ? '1' : '0'); } catch (e) {}
+        Reveal.layout();
+    };
+    const isRead = () => document.body.classList.contains('reading-mode');
+    btn.addEventListener('click', () => setRead(!isRead()));
+    Reveal.addKeyBinding({ keyCode: 82, key: 'R', description: 'Show/hide narration' },
+                         () => setRead(!isRead()));
+    let stored = null;
+    try { stored = localStorage.getItem('deckNarration'); } catch (e) {}
+    setRead(new URLSearchParams(location.search).has('read') || stored === '1');
 </script>
 </body>
 </html>
