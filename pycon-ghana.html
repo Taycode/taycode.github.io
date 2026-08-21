@@ -85,9 +85,9 @@
 <section>
     <h2>Where these examples come from</h2>
     <ul class="tight small">
-        <li>A <strong>web activity pipeline</strong> — scraping and classifying URLs for millions of users</li>
+        <li>A <strong>web activity pipeline</strong> — scraping and classifying the pages users visit</li>
         <li>A <strong>savings fintech</strong> — 3,000 → 30,000 users, roughly ₦1bn processed in a year</li>
-        <li>Two and a half years of <strong>ETL pipelines</strong> — Airflow, millions of rows a day</li>
+        <li>Two and a half years of <strong>ETL pipelines</strong> — Airflow, millions of rows</li>
         <li>A <strong>unified inbox SaaS</strong> — processing millions of messages from
             different social channels, for both B2B and B2C, in Germany and Austria</li>
     </ul>
@@ -175,8 +175,8 @@
         <li>Kafka took the burst without blinking — that's its job</li>
         <li>The gateway drained it as fast as it could, turning every message into an HTTP call</li>
         <li>Automation's CPU pinned at 100%, and it began <strong>restarting in a loop</strong></li>
-        <li>Requests from the gateway timed out — <strong>and so did the callbacks core was
-            waiting on</strong></li>
+        <li>The gateway's requests timed out — and <strong>the callbacks core was waiting
+            on were never sent</strong></li>
     </ul>
     <p class="small muted">Core was now waiting on answers that were never coming.</p>
     <aside class="notes">
@@ -251,8 +251,8 @@ def label_conversations(self, project_id, batch_id):
     "tasks.strip_pii":           {"queue": "light"},   # quick, high volume
     "tasks.notify_client":       {"queue": "light"},
 }</code></pre>
-    <pre><code class="language-text">queue: heavy   ──▶   4 workers  ×  large instances    celery -Q heavy -c 4
-queue: light   ──▶  20 workers  ×  small, shared      celery -Q light -c 20</code></pre>
+    <pre><code class="language-text">queue: heavy   ──▶  a few large instances      celery -Q heavy -c 4
+queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code></pre>
     <p class="small">Heavy work got a few big machines. Light work got many small shared ones.
        And the two <strong>scale independently</strong> — a labelling backlog adds heavy
        workers without touching anything else.</p>
@@ -350,7 +350,7 @@ def process_mandate(self, mandate_id):
     <div class="cols">
         <div>
             <p class="small warn"><strong>Before</strong></p>
-            <pre><code class="language-text">  every day, at a time
+            <pre><code class="language-text">  every day, at a set time
           │
    ┌──────────┐
    │ a person │ runs a script
@@ -518,6 +518,9 @@ def process_mandate(self, mandate_id, run_date):
     <aside class="notes">
         75s. The most important code in the talk. Walk it line by line.
         Stress: the database enforces it, not the application.
+        IF CHALLENGED: yes, we mark before we debit — so a crash between the two loses
+        that debit rather than duplicating it. That is the trade we chose: never charge
+        twice, and reconcile the gaps. The opposite order duplicates instead.
     </aside>
 </section>
 
@@ -584,8 +587,9 @@ t+3s   every worker retries at the same instant  ──▶ ...</code></pre>
 )
 def enrich_url(self, url, user_id):
     ...</code></pre>
-    <pre><code class="language-text">without jitter   │█│  │█│  │█│      all clients, same instant
-with jitter      │ █│▌ │ ▌█│  ▌│    spread across the window</code></pre>
+    <pre><code class="language-text">                    1s          2s              4s
+without jitter   ████████    ████████        ████████     every client, together
+with jitter      ██ ▌ █▌   ▌██  ██ ▌      █ ▌██   ▌██     spread across the window</code></pre>
     <aside class="notes">
         55s. Four flags, one decorator — very portable. Jitter is the part people skip.
     </aside>
@@ -610,7 +614,7 @@ with jitter      │ █│▌ │ ▌█│  ▌│    spread across the window
         We split notifications into their own service for exactly that last reason —
         so a stuck provider couldn't take the core product down with it.
     </div>
-    <aside class="notes">55s. End of §3 around 17:00.</aside>
+    <aside class="notes">55s. §3 should end around 18:30.</aside>
 </section>
 
 <section>
@@ -666,16 +670,17 @@ with jitter      │ █│▌ │ ▌█│  ▌│    spread across the window
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">Why it broke</span></p>
     <h2>The check was correct. It wasn't atomic.</h2>
-    <pre><code class="language-text">   request A                request B
-   ─────────                ─────────
-   read balance  5000
-                            read balance  5000
-   check 5000 >= 4200  ok
-                            check 5000 >= 4200  ok
-   write balance  800
-                            write balance  −4200</code></pre>
+    <pre><code class="language-text">   request A                          request B
+   ─────────                          ─────────
+   read balance              5,000
+                                      read balance              5,000
+   check 5,000 >= 4,200        ok
+                                      check 5,000 >= 4,200        ok
+   balance = balance - 4,200     800
+                                      balance = balance - 4,200  −3,400</code></pre>
     <p>Between the read and the write, someone else read the same number.
-       <strong>Both requests were individually correct.</strong></p>
+       <strong>Both requests were individually correct</strong> — and ₦8,400 left an
+       account holding ₦5,000.</p>
     <p class="small muted">This is a race condition: the result depends on the order two
        things happen to interleave.</p>
     <aside class="notes">60s. Walk the interleaving slowly, line by line. Juniors need the pace.</aside>
@@ -699,9 +704,9 @@ ALTER TABLE accounts ADD CONSTRAINT bal_nonneg CHECK (balance >= 0);</code></pre
 <section>
     <p class="kicker">§4 Databases &middot; <span class="beat">The concept</span></p>
     <h2>A balance you mutate, or a ledger you sum</h2>
-    <p class="small"><code>balance = balance - amount</code> is a read-modify-write — the race
-       from the last slide, baked into your schema. One answer is to make the entries the
-       truth and derive the number:</p>
+    <p class="small">A single mutable balance column is the thing every request fights
+       over, and it keeps <em>what</em> the balance is while losing <em>how it got there</em>.
+       One answer is to make the entries the truth and derive the number:</p>
     <pre><code class="language-sql">INSERT INTO ledger (account_id, amount, reason, idem_key)
 VALUES (42, -4200, 'withdrawal', 'wd:918:2026-08-21');
 
@@ -751,7 +756,6 @@ COMMIT;</code></pre>
     <aside class="notes">
         60s. We stored every notification so we could replay failures — that was an outbox
         without the name. And a replay is a second execution, so it needs §3's key.
-        End of §4 unit 5 around 23:00.
     </aside>
 </section>
 
@@ -793,18 +797,18 @@ COMMIT;</code></pre>
        were modelled, and every existing one needed rebuilding — about
        <strong>100,000 rows</strong> — without taking the product down.</p>
     <p class="small">The obvious approach is to put it in the migration file:</p>
-    <pre><code class="language-sql">-- migrations/0042_add_currency.sql        orders: 2.4 million rows
+    <pre><code class="language-sql">-- migrations/0042_workspace_v2.sql        workspaces: 100,000 rows
 
-ALTER TABLE orders ADD COLUMN currency text;                -- instant
+ALTER TABLE workspaces ADD COLUMN owner_id bigint;             -- instant
 
-UPDATE orders SET currency = 'NGN' WHERE currency IS NULL;  -- locks 2.4M rows,
-                                                            -- in one transaction
+UPDATE workspaces SET owner_id = legacy_owner;                 -- locks every row,
+                                                               -- in one transaction
 
-ALTER TABLE orders ALTER COLUMN currency SET NOT NULL;      -- full table scan,
-                                                            -- blocks reads AND writes
+ALTER TABLE workspaces ALTER COLUMN owner_id SET NOT NULL;     -- full table scan,
+                                                               -- blocks reads AND writes
 
-CREATE UNIQUE INDEX ON orders (reference);                  -- blocks writes for
-                                                            -- the whole build</code></pre>
+CREATE UNIQUE INDEX ON workspaces (slug);                      -- blocks writes for
+                                                               -- the whole build</code></pre>
     <p><strong>Four ordinary lines.</strong> One is instant. The other three hold your
        production database while the deploy waits.</p>
     <aside class="notes">
@@ -832,8 +836,8 @@ CREATE UNIQUE INDEX ON orders (reference);                  -- blocks writes for
     <div class="note">
         <strong>Migrations change structure, and they should be quick.</strong>
         Moving data is a separate job — one that runs in batches, can be paused, and can be
-        resumed. Don't put a two-million-row <code>UPDATE</code> in a file your deploy is
-        waiting on.
+        resumed. Don't put a hundred-thousand-row <code>UPDATE</code> in a file your deploy
+        is waiting on.
     </div>
     <aside class="notes">
         65s. The queue point is the one people haven't thought about: a migration that only
@@ -865,10 +869,11 @@ while True:
         to hand you 1,000 — so every batch is slower than the one before it. Keyset paging
         is an index seek: batch 900 costs the same as batch 1.
     </div>
-    <p class="small">Nine lines, and every one of them is a pattern from earlier in this talk.</p>
+    <p class="small">A dozen lines, and every one of them is a pattern from earlier in this talk.</p>
     <aside class="notes">
-        65s. Point at each comment: bounded memory (unit 2), safe restart (unit 3),
-        short transaction (unit 5), visible progress (unit 7). Say it isn't a coincidence.
+        65s. Point at each comment: bounded memory and batching (§2), safe restart (§3),
+        short transaction and keyset paging (§4), visible progress (§5).
+        Say it out loud — that isn't a coincidence.
     </aside>
 </section>
 
@@ -919,6 +924,9 @@ while True:
             Replay it — which is exactly why it needs the idempotency key from earlier.</li>
         <li><strong>Easier to build.</strong> A new feature is a new consumer. Nothing that
             already works has to be touched.</li>
+        <li><strong>Easier to follow.</strong> Give the event an id and carry it into every
+            consumer and every task argument — then one booking is traceable end to end,
+            across services, in structured logs you can actually query.</li>
     </ul>
     <aside class="notes">
         60s. Land this: we already had the outbox from the last section available to us.
@@ -988,7 +996,9 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
         <code>SELECT count(*) FROM accounts WHERE balance &lt; 0</code> should be a monitor,
         not something a customer tells you.
     </div>
-    <aside class="notes">60s. The note pays off the story from unit 3. End of §5 at 27:00.</aside>
+    <aside class="notes">
+        60s. The note pays off the second-server story. §5 should end around 28:00.
+    </aside>
 </section>
 
 <section>
