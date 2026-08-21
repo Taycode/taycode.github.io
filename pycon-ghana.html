@@ -68,6 +68,15 @@
         body.reading-mode .reveal .slides section .notes .cue { display: none; }
         body.reading-mode .reveal .slides section .notes p { margin: 0 0 10px; }
         body.reading-mode .reveal .slides section .notes p:last-child { margin-bottom: 0; }
+        .headshot {
+            width: 210px; height: 210px; border-radius: 50%;
+            border: 3px solid rgba(66,175,250,0.45); display: block;
+        }
+        .intro-grid { display: grid; grid-template-columns: 240px 1fr; gap: 40px; align-items: center; }
+        .qr-card { background: #fff; padding: 10px; border-radius: 12px; width: 168px; }
+        .qr-card img { display: block; width: 100%; image-rendering: pixelated; }
+        .links a { text-decoration: none; }
+        .links li { margin: 8px 0; }
         .reading-hint { font-size: 0.5em; color: #6f6f6f; margin-top: 26px; }
 
         .bridge {
@@ -110,6 +119,25 @@
        in the corner, to show the narration that goes with each slide.</p>
     <aside class="notes"><p class="narration">This is the deck from a thirty-minute talk at PyCon Ghana 2026. It walks through seven systems I worked on that broke in production — a savings fintech, an AI data pipeline, a logistics product, a creatives marketplace — and what each failure taught. Nothing here broke at Google scale: the numbers are three thousand users, thirty thousand users, a hundred thousand rows. The narration you are reading is what I say out loud over each slide.</p>
         <p class="cue">0:00 · 10s.</p></aside>
+</section>
+
+<section>
+    <h2>Hello — I'm Tay</h2>
+    <div class="intro-grid">
+        <img class="headshot" src="assets/images/resume-profile.png" alt="Abdulmateen Tairu">
+        <div>
+            <p class="lead" style="margin:0;"><strong>Abdulmateen Tairu</strong>
+               <span class="muted small">&nbsp;@taycode</span></p>
+            <p style="margin:14px 0 0;">Software Engineer at <strong>Chatarmin</strong></p>
+            <p class="small" style="margin:14px 0 0;">I've spent my career building
+               <strong>event-driven and data-intensive systems</strong> — fintech, AI data
+               pipelines, logistics, and now messaging at scale.</p>
+            <p class="small muted" style="margin:18px 0 0;">F1 and football, roughly in that order.</p>
+        </div>
+    </div>
+    <aside class="notes"><p class="narration">I'm Abdulmateen Tairu — most people online know me as Tay. I'm a software engineer at Chatarmin, and I've spent my career building event-driven and data-intensive systems: a savings fintech, AI data pipelines, a logistics product, and now messaging at scale. Everything in this talk comes out of systems I actually worked on, and most of it comes out of things I got wrong the first time.</p>
+        <p class="cue">20s. Keep it short — the room came for the content, not the CV.
+        The "got it wrong the first time" line buys you goodwill for the next 28 minutes.</p></aside>
 </section>
 
 <section>
@@ -507,29 +535,27 @@ queue: light   ──▶  many small, shared ones    celery -Q light -c 20</code
 </section>
 
 <section>
-    <p class="kicker">§3 Reliability &middot; <span class="beat">What we did</span></p>
-    <h2>Let the database refuse the second one</h2>
-    <p class="small muted">Both crons still fire at midnight. Only one of them debits anybody.</p>
-    <pre><code class="language-sql">CREATE UNIQUE INDEX ON mandate_runs (mandate_id, run_date);</code></pre>
-    <pre><code class="language-python">@celery.task(bind=True, max_retries=3)
-def process_mandate(self, mandate_id, run_date):
-    try:
-        with db.begin():
-            db.add(MandateRun(mandate_id=mandate_id, run_date=run_date))
-    except IntegrityError:
-        return "already processed"        # the second server stops here
-
-    debit_customer(mandate_id)</code></pre>
-    <pre><code class="language-text">00:00   server A   inserts (918, 2026-08-21)  ──▶ debits
-00:00   server B   IntegrityError              ──▶ stops</code></pre>
-    <p class="small">Two servers, ten servers, or a replay three days later —
-       <strong>the row can only exist once, so the debit can only happen once.</strong></p>
-    <aside class="notes"><p class="narration">This is what actually fixed the two crons. Every run of a mandate writes a marker row keyed on the mandate and the date, inside its own transaction, before any money moves. Both servers still wake up at midnight — server A inserts the row and debits, server B tries to insert the same key, gets an integrity error, and stops. The unique index is doing the work, not the application, and that is the whole point: two servers, ten servers, or a replay three days later, the row can only exist once, so the debit can only happen once.</p>
-        <p class="cue">75s. The most important code in the talk. Walk it line by line.
-        Stress: the database enforces it, not the application.
-        IF CHALLENGED: yes, we mark before we debit — so a crash between the two loses
-        that debit rather than duplicating it. That is the trade we chose: never charge
-        twice, and reconcile the gaps. The opposite order duplicates instead.</p></aside>
+    <p class="kicker">&sect;3 Reliability &middot; <span class="beat">The idea</span></p>
+    <h2>So stop trying to prevent it</h2>
+    <p class="small">You just saw three ways to stop the second run. All three leak.
+       <strong>So don't stop it &mdash; make it not matter.</strong></p>
+    <pre><code class="language-text">press a lift button 5 times      the lift still comes once
+switch a light off 5 times       it's still off
+add ₦100 to a wallet 5 times     you have ₦500</code></pre>
+    <p>The first two you can repeat without thinking. The third you cannot.
+       <strong>That property has a name: idempotent.</strong></p>
+    <div class="note">
+        <strong>Idempotent</strong> &mdash; an operation you can run any number of times and
+        still get the result of running it once.
+        <br><br>
+        This is the shift: you stop trying to guarantee the work happens
+        <em>exactly once</em>, and instead make it safe for the work to happen
+        <strong>more than once</strong> &mdash; which is achievable, and the other one isn't.
+    </div>
+    <aside class="notes"><p class="narration">This is the shift, and it is the part people miss. You have just seen three serious attempts to stop the same work running twice, and all three leak: a lock can expire while its holder is still working, a version check protects the row and not the charge you already sent, a hash ring reshuffles when nodes move. Exactly-once delivery is, in the general case, not something you can buy. So stop trying to buy it. Instead of guaranteeing the work happens exactly once, make it safe for the work to happen more than once. Think about a lift button: press it five times and the lift still comes once. A light switch set to off: flip it five times and it is still off. But add a hundred naira to a wallet five times and you have five hundred. The first two are idempotent, the third is not. Idempotent just means an operation you can run any number of times and still get the result of running it once. Once your work has that property, a duplicate stops being a bug you have to prevent and becomes an event you can safely ignore.</p>
+        <p class="cue">60s. THE conceptual slide of the talk &mdash; do not rush it.
+        The lift button lands with everybody; use it before the definition, not after.
+        Say the pivot out loud: we stop chasing exactly-once and make at-least-once safe.</p></aside>
 </section>
 
 <section>
@@ -558,9 +584,35 @@ def process_mandate(self, mandate_id, run_date):
 </section>
 
 <section>
+    <p class="kicker">§3 Reliability &middot; <span class="beat">What we did</span></p>
+    <h2>Let the database refuse the second one</h2>
+    <p class="small muted">Both crons still fire at midnight. Only one of them debits anybody.</p>
+    <pre><code class="language-sql">CREATE UNIQUE INDEX ON mandate_runs (mandate_id, run_date);</code></pre>
+    <pre><code class="language-python">@celery.task(bind=True, max_retries=3)
+def process_mandate(self, mandate_id, run_date):
+    try:
+        with db.begin():
+            db.add(MandateRun(mandate_id=mandate_id, run_date=run_date))
+    except IntegrityError:
+        return "already processed"        # the second server stops here
+
+    debit_customer(mandate_id)</code></pre>
+    <pre><code class="language-text">00:00   server A   inserts (918, 2026-08-21)  ──▶ debits
+00:00   server B   IntegrityError              ──▶ stops</code></pre>
+    <p class="small">Two servers, ten servers, or a replay three days later —
+       <strong>the row can only exist once, so the debit can only happen once.</strong></p>
+    <aside class="notes"><p class="narration">This is what actually fixed the two crons. Every run of a mandate writes a marker row keyed on the mandate and the date, inside its own transaction, before any money moves. Both servers still wake up at midnight — server A inserts the row and debits, server B tries to insert the same key, gets an integrity error, and stops. The unique index is doing the work, not the application, and that is the whole point: two servers, ten servers, or a replay three days later, the row can only exist once, so the debit can only happen once.</p>
+        <p class="cue">75s. The most important code in the talk. Walk it line by line.
+        Stress: the database enforces it, not the application.
+        IF CHALLENGED: yes, we mark before we debit — so a crash between the two loses
+        that debit rather than duplicating it. That is the trade we chose: never charge
+        twice, and reconcile the gaps. The opposite order duplicates instead.</p></aside>
+</section>
+
+<section>
     <p class="kicker">§3 Reliability &middot; <span class="beat">The concept</span></p>
-    <h2>Idempotency, and where the key comes from</h2>
-    <p class="small"><em>Idempotent</em> — running it twice leaves the same result as once.</p>
+    <h2>Where the key comes from</h2>
+    <p class="small">Most work is not naturally repeatable. You make it repeatable by giving each unit of work a <strong>key</strong> the database remembers.</p>
     <pre><code class="language-python">key = str(uuid4())                     # new key every attempt — useless
 key = f"{mandate_id}:{run_date}"       # same key every attempt</code></pre>
     <p><strong>Derive the key from the work, not from the attempt.</strong></p>
@@ -1004,12 +1056,30 @@ p99.9  999 out of 1,000 were faster than this</code></pre>
 
 <section class="title-slide">
     <h1>Thank you</h1>
-    <p style="margin-top: 40px;"><strong>Abdulmateen Tairu</strong><br>
-       <span class="muted">@taycode</span></p>
-    <p class="small muted" style="margin-top: 36px;">Questions?</p>
-    <aside class="notes"><p class="narration">Thanks for reading. The talk was given at PyCon Ghana 2026. If you want to argue with any of it, or you have a story of your own that fits one of these shapes, I am @taycode.</p>
-        <p class="cue">Q&amp;A prompts you can seed if the room is quiet:
-        "has anyone here run a cron on two servers?" — or the sockets-vs-HTTP story.</p></aside>
+    <div class="cols" style="margin-top: 34px; align-items: center;">
+        <div class="links" style="text-align: left;">
+            <p style="margin:0 0 14px;"><strong>Abdulmateen Tairu</strong>
+               <span class="muted small">&nbsp;@taycode</span><br>
+               <span class="muted small">Software Engineer at Chatarmin</span></p>
+            <ul class="tight small" style="list-style:none; margin:0; padding:0;">
+                <li><a href="https://github.com/Taycode">github.com/TayCode</a></li>
+                <li><a href="https://www.linkedin.com/in/abdulmateen-tairu/">linkedin.com/in/abdulmateen-tairu</a></li>
+                <li><a href="https://twitter.com/TayCode">twitter.com/TayCode</a></li>
+            </ul>
+        </div>
+        <div style="display:flex; flex-direction:column; align-items:center;">
+            <div class="qr-card">
+                <img src="assets/images/links-qr.svg" alt="taycode.github.io/links">
+            </div>
+            <p class="small muted" style="margin-top:10px; text-align:center;">
+                Slides &amp; links<br><span style="font-size:0.85em;">taycode.github.io/links</span></p>
+        </div>
+    </div>
+    <p class="lead" style="margin-top: 30px;"><strong>Questions?</strong></p>
+    <aside class="notes"><p class="narration">Thanks for reading. This talk was given at PyCon Ghana 2026. If you want to argue with any of it, or you have a story of your own that fits one of these shapes, I'd like to hear it — I'm @taycode more or less everywhere, and the QR code goes to all my links.</p>
+        <p class="cue">Q&amp;A prompts if the room goes quiet: "has anyone here run a cron on two servers?"
+        — or the sockets-vs-HTTP story from the notes in §5.
+        Leave this slide up for the whole Q&amp;A so people can scan the code.</p></aside>
 </section>
 
 </div>

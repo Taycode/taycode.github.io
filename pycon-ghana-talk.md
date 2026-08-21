@@ -103,9 +103,9 @@ audience always knows where they are.
 
 ## Status
 
-- [x] Deck built and restructured — `pycon-ghana.html`, **39 slides**
+- [x] Deck built and restructured — `pycon-ghana.html`, **41 slides**
 - [x] Speaker notes with a timing budget on every slide
-- [ ] Timed rehearsal. 39 slides / 30 min ≈ 46s each — plausible, but unproven
+- [ ] Timed rehearsal. 41 slides / 30 min ≈ 46s each — plausible, but unproven
 - [x] Trace IDs restored — folded into the "name the event" slide
 
 Preview: `python3 -m http.server 8000` → <http://localhost:8000/pycon-ghana.html>
